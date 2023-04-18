@@ -7,7 +7,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addMemory, getMemories, getMemoriesShortedByLastAccess, getRelevantMemoriesFrom
+from database import addMemory, addReflection, getMemories, getMemoriesShortedByLastAccess, getReflectionsOrdered, getRelevantMemoriesFrom
 from gpt import getMemoryQueries
 from vectorizer import vectorize
 
@@ -55,6 +55,22 @@ async def relevant_memories(request: Request, npcId: str):
         relevantMemoriesString.append(memory["memory"])
 
     return relevantMemoriesString
+
+@app.post("/reflection")
+async def post_reflection(request: Request, npcId: str, timestamp: float):
+    body = await request.json()
+    for reflection in body:
+        vector = vectorize(reflection["text"])
+        addReflection(npcId, json.dumps(reflection), timestamp, vector)
+    return True
+
+@app.get("/old_reflections")
+async def old_reflections(request: Request, npcId: str):
+    reflections = getReflectionsOrdered(npcId)
+    for reflection in reflections:
+        if "_id" in reflection:
+            del reflection["_id"]
+    return reflections
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):

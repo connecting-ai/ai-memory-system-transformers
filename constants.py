@@ -3,8 +3,12 @@ def MONGO_URL():
 
 def DB_NAME():
    return "ai_memories"
+
 def COL_NAME():
    return "memories"
+
+def REFLECTION_COL_NAME():
+   return "reflections"
 
 def OPENAI_KEY():
     return "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"

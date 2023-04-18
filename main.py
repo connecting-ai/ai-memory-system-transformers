@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from dataclasses import dataclass
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -6,6 +7,8 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
+from database import addMemory, getMemories, getMemoriesShortedByLastAccess, getRelevantMemoriesFrom
+from gpt import getMemoryQueries
 from vectorizer import vectorize
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
@@ -25,9 +28,15 @@ loop = asyncio.get_event_loop()
 class Query():
     query_name: str
     query_sequence: str
+    query_type: int
     input: str
+    npcId: str
+    memory: str
+    timestamp: float
+    lastAccess: float
+    vector: str
+    importance: str
     result: str = ""
-    extention: str = ".glb"
     experiment_id: str = None
     status: str = "pending"
 
@@ -35,19 +44,51 @@ class Query():
         self.experiment_id = str(time())
         self.experiment_dir = os.path.join(EXPERIMENTS_BASE_DIR, self.experiment_id)
 
-@app.get("/generate")
-async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input)
+@app.get("/reflection")
+async def relevant_memories(request: Request, npcId: str):
+    memories = getMemoriesShortedByLastAccess(npcId)
+    queries = getMemoryQueries(memories)
+    relevantMemories = getRelevantMemoriesFrom(queries, npcId)
+
+    relevantMemoriesString = []
+    for memory in relevantMemories:
+        relevantMemoriesString.append(memory["memory"])
+
+    return relevantMemoriesString
+
+@app.get("/memories")
+async def memories(request: Request, npcId: str):
+    memories = getMemoriesShortedByLastAccess(npcId)
+    for memory in memories:
+        del memory["_id"]
+    return memories
+
+@app.get("/add_in_memory")
+async def add_in_memory(request: Request,background_tasks: BackgroundTasks, npcId: str, memory: str, timestamp: float, lastAccess: float, importance: str):
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=npcId, memory=memory, timestamp=timestamp, lastAccess=lastAccess, importance=importance)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
-    LOGGER.info(f'root - added task')
     return {"id": query.experiment_id}
 
-@app.get("/generate_result")
+@app.get("/vectorize")
+async def root(request: Request, background_tasks: BackgroundTasks, input: str):
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0)
+    QUERY_BUFFER[query.experiment_id] = query
+    background_tasks.add_task(process, query)
+    return {"id": query.experiment_id}
+
+@app.get("/result")
 async def result(request: Request, query_id: str):
     if query_id in QUERY_BUFFER:
         if QUERY_BUFFER[query_id].status == "done":
-            resp = { 'vector': QUERY_BUFFER[query_id].result }
+            resp = {}
+            if (QUERY_BUFFER[query_id].query_type == 0):
+                resp = { 'vector': QUERY_BUFFER[query_id].result }
+            else:
+                res = QUERY_BUFFER[query_id].result
+                if "_id" in res:
+                    del res["_id"]
+                return res
             del QUERY_BUFFER[query_id]
             return resp
         return {"status": QUERY_BUFFER[query_id].status}
@@ -55,13 +96,15 @@ async def result(request: Request, query_id: str):
         return {"status": "finished"}
 
 def process(query):
-    LOGGER.info(f"process - {query.experiment_id} - Submitted query job. Now run non-IO work for 10 seconds...")
-    start_time = time()
-    res = vectorize(query.input)
+    res = None
+    if (query.query_type == 0):
+        res = vectorize(query.input)
+    elif (query.query_type == 1):
+        query.vector = vectorize(query.memory)
+        res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance)
+    
     QUERY_BUFFER[query.experiment_id].result = res
-    print("--- %s seconds ---" % (time() - start_time))
     QUERY_BUFFER[query.experiment_id].status = "done"
-    LOGGER.info(f'process - {query.experiment_id} - done!')
 
 @app.get("/backlog/")
 def return_backlog():

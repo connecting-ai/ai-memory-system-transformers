@@ -1,17 +1,19 @@
+from envReader import getValue
+
 def MONGO_URL():
- return "mongodb://localhost:27017/"
+ return getValue("MONGO_URL")
 
 def DB_NAME():
-   return "ai_memories"
+   return getValue("DB_NAME")
 
 def COL_NAME():
-   return "memories"
+   return getValue("COL_NAME")
 
 def REFLECTION_COL_NAME():
-   return "reflections"
+   return getValue("REFLECTION_COL_NAME")
 
 def OPENAI_KEY():
-    return "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"
+    return getValue("OPENAI_KEY")
 
 def MIN_COS_SIM_VALUE():
-   return 0.4
+   return float(getValue("MIN_COS_SIM_VALUE"))

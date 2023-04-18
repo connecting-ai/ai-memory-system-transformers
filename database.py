@@ -86,8 +86,9 @@ def getMemoriesShortedByLastAccess(npcId, max=100):
     query = {
         "npcId": npcId
     }
-    cursor = col.find(query).sort("previousAccess", -1)
+    cursor = col.find(query).sort("lastAccess", -1)
     arr = [x for x in cursor]
+    print('dada', len(arr))
     for x in arr:
         x["lastAccess"] = datetime.datetime.fromtimestamp(x["lastAccess"])
     arr.sort(key=lambda x: x["lastAccess"], reverse=True)
@@ -108,7 +109,8 @@ def getMemoriesShortedByLastAccess(npcId, max=100):
 
 def getRelevantMemoriesFrom(queries, npcId):
     memories = getMemoriesShortedByLastAccess(npcId, max=100)
-   
+    print(len(memories))
+
     _vectors = []
     for memory in memories:
         _vectors.append(vectorizeObj(memory["memory"]))

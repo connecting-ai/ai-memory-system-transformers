@@ -1,3 +1,6 @@
+from envReader import read, getValue
+read()
+
 import asyncio
 import json
 import os
@@ -9,7 +12,7 @@ from time import time
 from fastapi.middleware.cors import CORSMiddleware
 from database import addMemory, addReflection, getMemories, getMemoriesShortedByLastAccess, getReflectionsOrdered, getRelevantMemoriesFrom
 from gpt import getMemoryQueries
-from vectorizer import vectorize
+from vectorizer import vectorize, vectorizeObj
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
 LOGGER = logging.getLogger(__name__)
@@ -72,11 +75,24 @@ async def old_reflections(request: Request, npcId: str):
             del reflection["_id"]
     return reflections
 
+@app.get("/query")
+async def query(request: Request, npcId: str, input: str):
+    print(npcId, ' - ', input)
+    memories = getRelevantMemoriesFrom([input], npcId)
+    
+    res = []
+    for memory in memories:
+        res.append(memory["memory"])
+    print(res)
+
+    return res
+
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
     memories = getMemoriesShortedByLastAccess(npcId)
     for memory in memories:
         del memory["_id"]
+        
     return memories
 
 @app.get("/add_in_memory")
@@ -129,4 +145,4 @@ def return_backlog():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=65529)
+    uvicorn.run(app, host="0.0.0.0", port=int(getValue("PORT")))

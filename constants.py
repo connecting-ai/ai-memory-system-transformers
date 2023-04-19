@@ -9,9 +9,6 @@ def DB_NAME():
 def COL_NAME():
    return getValue("COL_NAME")
 
-def REFLECTION_COL_NAME():
-   return getValue("REFLECTION_COL_NAME")
-
 def OPENAI_KEY():
     return getValue("OPENAI_KEY")
 

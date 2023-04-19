@@ -40,13 +40,14 @@ def compare(comparerVector, targetVectors):
     for ar in cos_sims:
         for arr in ar:
             for i, each_val in enumerate(arr):
-                #convert each_val to value from tensor to float
                 value = each_val.item()
                 if (value >= MIN_COS_SIM_VALUE()):
                     winners.append({ 'index': index, 'value': value})
             index += 1
 
 
-    #return only the winner with highest value
     winners.sort(key=lambda x: x["value"], reverse=True)
+    if (len(winners)>3):
+        winners = winners[:3]
+
     return winners

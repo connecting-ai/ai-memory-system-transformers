@@ -2,7 +2,7 @@ import datetime
 import json
 import numpy as np
 import pymongo 
-from constants import DB_NAME, MONGO_URL, COL_NAME, REFLECTION_COL_NAME
+from constants import DB_NAME, MONGO_URL, COL_NAME
 from vectorizer import compare, vectorizeObj
 
 client = pymongo.MongoClient(MONGO_URL())
@@ -11,7 +11,6 @@ client = pymongo.MongoClient(MONGO_URL())
 db = client[DB_NAME()]
 
 col = db[COL_NAME()]
-reflection_col = db[REFLECTION_COL_NAME()]
 
 def addMemory(npcId, memory, timestamp, lastAccess, vector, importance):
     memoryObject = {
@@ -31,24 +30,6 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance):
     memoryObject["recency"] = recency
 
     return memoryObject
-
-def addReflection(npcId, reflection, timestamp, vector):
-    reflectionObject = {
-        "npcId": npcId,
-        "reflection": reflection,
-        "timestamp": timestamp,
-        "vector": vector
-    }
-
-    reflection_col.insert_one(reflectionObject)
-
-def getReflectionsOrdered(npcId, max=100):
-    query = {
-        "npcId": npcId
-    }
-    cursor = reflection_col.find(query).sort("timestamp", -1).limit(max)
-    reflections = [x for x in cursor]
-    return reflections
 
 def getMemory(npcId, memory):
     query = {

@@ -2,7 +2,6 @@ from envReader import read, getValue
 read()
 
 import asyncio
-import json
 import os
 from dataclasses import dataclass
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -10,9 +9,9 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addMemory, addReflection, getMemories, getMemoriesShortedByLastAccess, getReflectionsOrdered, getRelevantMemoriesFrom
+from database import addMemory, getMemoriesShortedByLastAccess, getRelevantMemoriesFrom
 from gpt import getMemoryQueries
-from vectorizer import vectorize, vectorizeObj
+from vectorizer import vectorize
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
 LOGGER = logging.getLogger(__name__)
@@ -62,18 +61,25 @@ async def relevant_memories(request: Request, npcId: str):
 @app.post("/reflection")
 async def post_reflection(request: Request, npcId: str, timestamp: float):
     body = await request.json()
+    memories = []
     for reflection in body:
-        vector = vectorize(reflection["text"])
-        addReflection(npcId, json.dumps(reflection), timestamp, vector)
-    return True
+        print(reflection)
+        memory = reflection["text"] + "(Because of "
+        for reason in reflection["references"]:
+            memory += reason + ", "
+        memory = memory[:-2]
+        memory += ")"
+        print(memory)
+        vector = vectorize(memory)
+        print("vector done")
+        returnedMemory = addMemory(npcId, memory, timestamp, timestamp, vector, -1)
+        if "_id" in returnedMemory:
+            del returnedMemory["_id"]
+            
+        memories.append(returnedMemory)
 
-@app.get("/old_reflections")
-async def old_reflections(request: Request, npcId: str):
-    reflections = getReflectionsOrdered(npcId)
-    for reflection in reflections:
-        if "_id" in reflection:
-            del reflection["_id"]
-    return reflections
+    print(memories)
+    return memories
 
 @app.get("/query")
 async def query(request: Request, npcId: str, input: str):

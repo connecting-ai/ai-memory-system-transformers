@@ -12,7 +12,7 @@ db = client[DB_NAME()]
 
 col = db[COL_NAME()]
 
-def addMemory(npcId, memory, timestamp, lastAccess, vector, importance):
+def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
     memoryObject = {
         "npcId": npcId,
         "memory": memory,
@@ -21,6 +21,30 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance):
         "vector": vector,
         "importance": importance
     }
+    
+    if checker == True:
+        query = {
+            "npcId": npcId,
+            "memory": memory
+        }
+
+        if col.find_one(query) != None:
+            print("memory already exists, updating old timestamp")
+            memoryObject = col.find_one(query)
+            memoryObject["timestamp"] = timestamp
+            memoryObject["lastAccess"] = lastAccess
+            memoryObject["vector"] = vector
+            memoryObject["importance"] = importance
+            col.update_one(query, {"$set": memoryObject})
+
+            unixTimeNow = datetime.datetime.now().timestamp()
+            memoryTime = memoryObject["lastAccess"]
+            recency = unixTimeNow - memoryTime
+            recency = recency * 0.99
+            memoryObject["recency"] = recency
+            return memoryObject
+    
+    print("adding new memory")
     col.insert_one(memoryObject)
 
     unixTimeNow = datetime.datetime.now().timestamp()

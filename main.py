@@ -38,6 +38,7 @@ class Query():
     lastAccess: float
     vector: str
     importance: str
+    checker: bool
     result: str = ""
     experiment_id: str = None
     status: str = "pending"
@@ -102,15 +103,15 @@ async def memories(request: Request, npcId: str):
     return memories
 
 @app.get("/add_in_memory")
-async def add_in_memory(request: Request,background_tasks: BackgroundTasks, npcId: str, memory: str, timestamp: float, lastAccess: float, importance: str):
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=npcId, memory=memory, timestamp=timestamp, lastAccess=lastAccess, importance=importance)
+async def add_in_memory(request: Request,background_tasks: BackgroundTasks, npcId: str, memory: str, timestamp: float, lastAccess: float, importance: str, checker: bool):
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=npcId, memory=memory, timestamp=timestamp, lastAccess=lastAccess, importance=importance, checker=checker)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=0)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -139,7 +140,7 @@ def process(query):
         res = vectorize(query.input)
     elif (query.query_type == 1):
         query.vector = vectorize(query.memory)
-        res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance)
+        res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
     
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"

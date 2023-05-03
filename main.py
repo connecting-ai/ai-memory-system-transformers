@@ -9,9 +9,9 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addMemory, getMemoriesShortedByLastAccess, getRelevantMemoriesFrom
+from database import embedding_model, npcID_to_retriever, addMemory, getRelevantMemoriesFrom
 from gpt import getMemoryQueries
-from vectorizer import vectorize
+# from vectorizer import vectorize
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
 LOGGER = logging.getLogger(__name__)
@@ -49,7 +49,10 @@ class Query():
 
 @app.get("/reflection")
 async def relevant_memories(request: Request, npcId: str):
-    memories = getMemoriesShortedByLastAccess(npcId)
+    memories = []
+    for x in npcID_to_retriever[npcId].memory_stream:
+        memories.append(x.page_content)
+
     queries = getMemoryQueries(memories)
     relevantMemories = getRelevantMemoriesFrom(queries, npcId)
 
@@ -57,7 +60,7 @@ async def relevant_memories(request: Request, npcId: str):
     for memory in relevantMemories:
         relevantMemoriesString.append(memory["memory"])
 
-    return relevantMemoriesString
+    return list(dict.fromkeys(relevantMemoriesString)) 
 
 @app.post("/reflection")
 async def post_reflection(request: Request, npcId: str, timestamp: float):
@@ -71,7 +74,7 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
         memory = memory[:-2]
         memory += ")"
         print(memory)
-        vector = vectorize(memory)
+        vector = embedding_model.embed_query(memory)
         print("vector done")
         returnedMemory = addMemory(npcId, memory, timestamp, timestamp, vector, -1)
         if "_id" in returnedMemory:
@@ -96,9 +99,20 @@ async def query(request: Request, npcId: str, input: str):
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
-    memories = getMemoriesShortedByLastAccess(npcId)
-    for memory in memories:
-        del memory["_id"]
+    if npcId not in npcID_to_retriever.keys():
+        return []
+    memories = []
+    for x in npcID_to_retriever[npcId].memory_stream:
+        print(x)
+        memories.append({
+                "npcId": npcId,
+                "timestamp":x.timestamp,
+                "lastAccess":x.lastAccess,
+                "importance":x.importance,
+                "memory":x.page_content
+            })
+    # for memory in memories:
+    #     del memory["_id"]
         
     return memories
 
@@ -137,9 +151,9 @@ async def result(request: Request, query_id: str):
 def process(query):
     res = None
     if (query.query_type == 0):
-        res = vectorize(query.input)
+        res = embedding_model.embed_query(query.input)
     elif (query.query_type == 1):
-        query.vector = vectorize(query.memory)
+        query.vector = embedding_model.embed_query(query.memory)
         res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
     
     QUERY_BUFFER[query.experiment_id].result = res

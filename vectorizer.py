@@ -1,32 +1,32 @@
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 import json
 from constants import MIN_COS_SIM_VALUE
 
-model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+# model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-def vectorize(input: str):
-    inputList = [input]
-    inputList = [sentence.lower()\
-             .replace('br','')\
-             .replace('<',"")\
-             .replace(">","")\
-             .replace('\\',"")\
-             .replace('\/',"")\
-             for sentence in inputList]
-    embedding = model.encode(inputList)
-    return json.dumps(embedding.tolist())
+# def vectorize(input: str):
+#     inputList = [input]
+#     inputList = [sentence.lower()\
+#              .replace('br','')\
+#              .replace('<',"")\
+#              .replace(">","")\
+#              .replace('\\',"")\
+#              .replace('\/',"")\
+#              for sentence in inputList]
+#     embedding = model.encode(inputList)
+#     return json.dumps(embedding.tolist())
 
-def vectorizeObj(input: str):
-    inputList = [input]
-    inputList = [sentence.lower()\
-             .replace('br','')\
-             .replace('<',"")\
-             .replace(">","")\
-             .replace('\\',"")\
-             .replace('\/',"")\
-             for sentence in inputList]
-    embedding = model.encode(inputList)
-    return embedding
+# def vectorizeObj(input: str):
+#     inputList = [input]
+#     inputList = [sentence.lower()\
+#              .replace('br','')\
+#              .replace('<',"")\
+#              .replace(">","")\
+#              .replace('\\',"")\
+#              .replace('\/',"")\
+#              for sentence in inputList]
+#     embedding = model.encode(inputList)
+#     return embedding
 
 def compare(comparerVector, targetVectors):
     cos_sims = []

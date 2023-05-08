@@ -12,7 +12,7 @@ RUN mkdir -p /experiments
 
 ADD . .
 
-RUN pip install pymongo openai uvicorn
+RUN pip install pymongo openai uvicorn langchain faiss-gpu 
 
 EXPOSE 3000
 

@@ -4,6 +4,7 @@ import numpy as np
 import pymongo 
 
 import _pickle as cPickle
+import os
 import bz2
 
 from constants import DB_NAME, MONGO_URL, COL_NAME
@@ -22,7 +23,6 @@ from langchain.vectorstores import FAISS
 
 from typing import Any, Dict, List, Optional, Tuple
 from copy import deepcopy
-
 
 
 def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
@@ -68,6 +68,14 @@ embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 embedding_size = 384
 
 npcID_to_retriever = {}
+print("starting, will try to load - exists", os.path.exists("retriever.pkl"))
+if os.path.exists("retreiver.pbz2"):
+    print("load file found")
+    data = bz2.BZ2File("retreiver.pbz2", "rb")
+    data = cPickle.load(data)
+    npcID_to_retriever = data
+    print("loaded:", npcID_to_retriever)
+
 
 index = faiss.IndexFlatL2(embedding_size)
 vectorstore = FAISS(embedding_model.embed_query, index, InMemoryDocstore({}), {})
@@ -163,14 +171,29 @@ def getRelevantMemoriesFrom(queries, npcId):
         retrieved_docs = retriever.get_relevant_documents(query)
 
         for doc in retrieved_docs:
+            timestamp = 0
+            lastAccess = 0
+            importance = 0
+            vector = ""
+
+            for key, value in x.metadata.items():
+                if "timestamp" in key.lower():
+                    timestamp = value
+                elif "lastaccess" in key.lower():
+                    lastAccess = value
+                elif "importance" in key.lower():
+                    importance = value
+                elif "vector" in key.lower():
+                    vector = value
+                    
             memory = {
                 "npcId": npcId,
                 "memory": doc.page_content,
-                "timestamp": doc.metadata["timestamp"],
-                "lastAccess": doc.metadata["lastAccess"],
-                "vector": doc.metadata["vector"],
-                "importance": doc.metadata["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc.metadata["lastAccess"]
+                "timestamp": timestamp,
+                "lastAccess": lastAccess,
+                "vector": vector,
+                "importance": importance,
+                "recency": datetime.datetime.now().timestamp() - lastAccess
             }
             if memory not in relevant:
                 relevant.append(memory)

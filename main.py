@@ -103,16 +103,25 @@ async def memories(request: Request, npcId: str):
         return []
     memories = []
     for x in npcID_to_retriever[npcId].memory_stream:
-        print(x)
+        timestamp = 0
+        lastAccess = 0
+        importance = 0
+
+        for key, value in x.metadata.items():
+            if "timestamp" in key.lower():
+                timestamp = value
+            elif "lastaccess" in key.lower():
+                lastAccess = value
+            elif "importance" in key.lower():
+                importance = value
+
         memories.append({
                 "npcId": npcId,
-                "timestamp":x.timestamp,
-                "lastAccess":x.lastAccess,
-                "importance":x.importance,
+                "timestamp":timestamp,
+                "lastAccess":lastAccess,
+                "importance":importance,
                 "memory":x.page_content
             })
-    # for memory in memories:
-    #     del memory["_id"]
         
     return memories
 
@@ -158,6 +167,16 @@ def process(query):
     
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"
+
+    if (query.query_type == 1):
+        import _pickle as cPickle
+        import bz2
+        #Save the retriever to disk after every memory addition
+        try:
+            with bz2.BZ2File("retreiver.pbz2", "w") as f: 
+                cPickle.dump(npcID_to_retriever, f)
+        except Exception:
+            pass
 
 @app.get("/backlog/")
 def return_backlog():

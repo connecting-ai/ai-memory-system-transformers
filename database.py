@@ -159,7 +159,7 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
 
 #     return arr
 
-def getRelevantMemoriesFrom(queries, npcId):
+def getRelevantMemoriesFrom(queries, npcId, top_k=1):
     if npcId not in npcID_to_retriever.keys():
         return []
 
@@ -168,7 +168,9 @@ def getRelevantMemoriesFrom(queries, npcId):
 
     for query in queries:
         # vector = embedding_model.embed_query(query)
+        retriever.k = top_k
         retrieved_docs = retriever.get_relevant_documents(query)
+        retriever.k = 1
 
         for doc in retrieved_docs:
             timestamp = 0

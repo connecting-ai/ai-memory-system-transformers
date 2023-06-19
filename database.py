@@ -176,7 +176,7 @@ def getRelevantMemoriesFrom(queries, npcId):
             importance = 0
             vector = ""
 
-            for key, value in x.metadata.items():
+            for key, value in doc.metadata.items():
                 if "timestamp" in key.lower():
                     timestamp = value
                 elif "lastaccess" in key.lower():

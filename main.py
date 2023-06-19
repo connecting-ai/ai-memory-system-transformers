@@ -48,19 +48,20 @@ class Query():
         self.experiment_dir = os.path.join(EXPERIMENTS_BASE_DIR, self.experiment_id)
 
 @app.get("/reflection")
-async def relevant_memories(request: Request, npcId: str):
+async def relevant_memories(request: Request, npcId: str, top_k: int = 1):
     memories = []
     for x in npcID_to_retriever[npcId].memory_stream:
         memories.append(x.page_content)
 
     queries = getMemoryQueries(memories)
-    relevantMemories = getRelevantMemoriesFrom(queries, npcId)
+    relevantMemories = getRelevantMemoriesFrom(queries, npcId, top_k)
 
     relevantMemoriesString = []
     for memory in relevantMemories:
         relevantMemoriesString.append(memory["memory"])
 
     return list(dict.fromkeys(relevantMemoriesString)) 
+
 
 @app.post("/reflection")
 async def post_reflection(request: Request, npcId: str, timestamp: float):
@@ -86,14 +87,12 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
     return memories
 
 @app.get("/query")
-async def query(request: Request, npcId: str, input: str):
+async def query(request: Request, npcId: str, input: str, top_k: int = 1):
     print(npcId, ' - ', input)
-    memories = getRelevantMemoriesFrom([input], npcId)
-    
+    memories = getRelevantMemoriesFrom([input], npcId, top_k)
     res = []
     for memory in memories:
         res.append(memory["memory"])
-    print(res)
 
     return res
 

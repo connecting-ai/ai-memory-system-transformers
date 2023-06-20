@@ -2,3 +2,6 @@ sentence-transformers
 asyncio
 fastapi
 pymongo
+openai
+uvicorn
+faiss-gpu

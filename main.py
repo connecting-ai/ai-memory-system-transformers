@@ -182,7 +182,7 @@ def process(query):
         import bz2
         #Save the retriever to disk after every memory addition
         try:
-            with bz2.BZ2File("retreiver.pbz2", "w") as f: 
+            with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
                 cPickle.dump(npcID_to_retriever, f)
         except Exception:
             pass

@@ -4,4 +4,4 @@ fastapi
 pymongo
 openai
 uvicorn
-faiss-gpu
+faiss-cpu

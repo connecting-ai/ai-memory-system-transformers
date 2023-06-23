@@ -10,7 +10,7 @@ import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
 from database import embedding_model, npcID_to_retriever, addMemory, getRelevantMemoriesFrom
-from gpt import getMemoryQueries
+from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 # from vectorizer import vectorize
 
@@ -57,19 +57,30 @@ class Query():
         self.experiment_dir = os.path.join(EXPERIMENTS_BASE_DIR, self.experiment_id)
 
 @app.get("/reflection")
-async def relevant_memories(request: Request, npcId: str, max_memories: int = -1, top_k: int = 1):
-    memories = []
-    for x in npcID_to_retriever[npcId].memory_stream:
-        memories.append(x.page_content)
 
-    queries = getMemoryQueries(memories)
-    relevantMemories = getRelevantMemoriesFrom(queries, npcId, max_memories, top_k)
+async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top_ns:int = 3, top_k: int = 5):
+    #last_k: number of memories to consider for reflection
+    #top_ns: number of salient questions generated for the last_k memories
+    #top_k: number of memories retreived for each salient question
+    memories = []
+    for x in npcID_to_retriever[npcId].memory_stream[-last_k:]:
+        memories.append(x.page_content)
+    # print(memories, type(memories[0]))
+
+    queries = getMemoryQueries(memories, top_ns)
+    # print('=========', queries[0])
+    relevantMemories = getRelevantMemoriesFrom(queries, npcId, top_k)
 
     relevantMemoriesString = []
     for memory in relevantMemories:
         relevantMemoriesString.append(memory["memory"])
 
-    return list(dict.fromkeys(relevantMemoriesString)) 
+    answers = getMemoryAnswers(queries ,relevantMemoriesString, top_ns)
+
+    #To complete the reflection, first run this GET route, then add all the entries in `answers` to the memory with `/add_in_memory` route
+
+    return answers
+    # return list(dict.fromkeys(relevantMemoriesString)) 
 
 
 @app.post("/reflection")
@@ -77,22 +88,22 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
     body = await request.json()
     memories = []
     for reflection in body:
-        print(reflection)
+        # print(reflection)
         memory = reflection["text"] + "(Because of "
         for reason in reflection["references"]:
             memory += reason + ", "
         memory = memory[:-2]
         memory += ")"
-        print(memory)
+        # print(memory)
         vector = embedding_model.embed_query(memory)
-        print("vector done")
+        # print("vector done")
         returnedMemory = addMemory(npcId, memory, timestamp, timestamp, vector, -1)
         if "_id" in returnedMemory:
             del returnedMemory["_id"]
             
         memories.append(returnedMemory)
 
-    print(memories)
+    # print(memories)
     return memories
 
 @app.get("/query")

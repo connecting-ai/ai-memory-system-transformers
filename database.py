@@ -74,7 +74,7 @@ if os.path.exists("/db/retreiver.pbz2"):
     data = bz2.BZ2File("/db/retreiver.pbz2", "rb")
     data = cPickle.load(data)
     npcID_to_retriever = data
-    print("loaded:", npcID_to_retriever)
+    # print("loaded:", npcID_to_retriever)
 
 
 index = faiss.IndexFlatL2(embedding_size)

@@ -11,8 +11,17 @@ from time import time
 from fastapi.middleware.cors import CORSMiddleware
 from database import embedding_model, npcID_to_retriever, addMemory, getRelevantMemoriesFrom
 from gpt import getMemoryQueries
+from pydantic import BaseModel
 # from vectorizer import vectorize
 
+class AddInMemoryData(BaseModel):
+    npcId: str
+    memory: str
+    timestamp: float
+    lastAccess: float
+    importance: str
+    addOnlyIfUnique: bool = False
+    
 logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
 LOGGER = logging.getLogger(__name__)
 
@@ -124,9 +133,10 @@ async def memories(request: Request, npcId: str):
         
     return memories
 
-@app.get("/add_in_memory")
-async def add_in_memory(request: Request,background_tasks: BackgroundTasks, npcId: str, memory: str, timestamp: float, lastAccess: float, importance: str, checker: bool):
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=npcId, memory=memory, timestamp=timestamp, lastAccess=lastAccess, importance=importance, checker=checker)
+@app.post("/add_in_memory")
+async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data: AddInMemoryData):
+    print(data)
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}

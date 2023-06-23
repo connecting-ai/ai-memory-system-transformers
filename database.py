@@ -159,7 +159,7 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
 
 #     return arr
 
-def getRelevantMemoriesFrom(queries, npcId, top_k=1):
+def getRelevantMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
     if npcId not in npcID_to_retriever.keys():
         return []
 
@@ -199,6 +199,11 @@ def getRelevantMemoriesFrom(queries, npcId, top_k=1):
             }
             if memory not in relevant:
                 relevant.append(memory)
+                
+            #sort them based on recency
+            relevant.sort(key=lambda x: x["recency"], reverse=True)
+            if max_memories>0:
+                relevant = relevant[:max_memories]
 
     return relevant
 

@@ -57,13 +57,13 @@ class Query():
         self.experiment_dir = os.path.join(EXPERIMENTS_BASE_DIR, self.experiment_id)
 
 @app.get("/reflection")
-async def relevant_memories(request: Request, npcId: str, top_k: int = 1):
+async def relevant_memories(request: Request, npcId: str, max_memories: int = -1, top_k: int = 1):
     memories = []
     for x in npcID_to_retriever[npcId].memory_stream:
         memories.append(x.page_content)
 
     queries = getMemoryQueries(memories)
-    relevantMemories = getRelevantMemoriesFrom(queries, npcId, top_k)
+    relevantMemories = getRelevantMemoriesFrom(queries, npcId, max_memories, top_k)
 
     relevantMemoriesString = []
     for memory in relevantMemories:

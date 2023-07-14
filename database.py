@@ -96,6 +96,7 @@ def add_documents(self, documents: List[Document], **kwargs: Any) -> List[str]:
             doc.metadata["created_at"] = current_time
         doc.metadata["buffer_idx"] = len(self.memory_stream) + i
     self.memory_stream.extend(dup_docs)
+    print('add documents executed')
     return self.vectorstore.add_documents(dup_docs, **kwargs)                     
 
 
@@ -120,7 +121,7 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
 
     npcID_to_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
 
-    
+    print('Added memory', memory)
 
     return {
         "npcId": npcId,
@@ -205,6 +206,7 @@ def getRelevantMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
             if max_memories>0:
                 relevant = relevant[:max_memories]
 
+    print('Returning retrieved relevant memories from query:', queries)
     return relevant
 
 

@@ -68,10 +68,10 @@ embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
 embedding_size = 768
 
 npcID_to_retriever = {}
-print("starting, will try to load - exists", os.path.exists(".db/retreiver.pbz2"))
+print("starting, will try to load - exists", os.path.exists("./db/retreiver.pbz2"))
 if os.path.exists("/db/retreiver.pbz2"):
     print("load file found")
-    data = bz2.BZ2File(".db/retreiver.pbz2", "rb")
+    data = bz2.BZ2File("./db/retreiver.pbz2", "rb")
     data = cPickle.load(data)
     npcID_to_retriever = data
     # print("loaded:", npcID_to_retriever)

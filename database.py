@@ -63,9 +63,9 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         return score                         
 
 
-embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
 # Initialize the vectorstore as empty
-embedding_size = 384
+embedding_size = 768
 
 npcID_to_retriever = {}
 print("starting, will try to load - exists", os.path.exists(".db/retreiver.pbz2"))

@@ -180,11 +180,15 @@ async def result(request: Request, query_id: str):
 def process(query):
     res = None
     if (query.query_type == 0):
+        print('Query Type is 0')
         res = embedding_model.embed_query(query.input)
     elif (query.query_type == 1):
+        print('Query Type is 1')
         query.vector = embedding_model.embed_query(query.memory)
         res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
-    
+    else:
+        print("No Query Type was present")
+        
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"
 

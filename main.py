@@ -14,6 +14,17 @@ from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 # from vectorizer import vectorize
 
+class MemoryData():
+    npcId: str
+    memory: str
+    timestamp: float
+    lastAccess: float
+    importance: str
+    addOnlyIfUnique: bool = False
+    
+class MassMemoryData(BaseModel):
+    memories: list
+    
 class AddInMemoryData(BaseModel):
     npcId: str
     memory: str
@@ -48,6 +59,7 @@ class Query():
     vector: str
     importance: str
     checker: bool
+    memories: str
     result: str = ""
     experiment_id: str = None
     status: str = "pending"
@@ -57,7 +69,6 @@ class Query():
         self.experiment_dir = os.path.join(EXPERIMENTS_BASE_DIR, self.experiment_id)
 
 @app.get("/reflection")
-
 async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top_ns:int = 3, top_k: int = 5):
     #last_k: number of memories to consider for reflection
     #top_ns: number of salient questions generated for the last_k memories
@@ -81,7 +92,6 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
 
     return answers
     # return list(dict.fromkeys(relevantMemoriesString)) 
-
 
 @app.post("/reflection")
 async def post_reflection(request: Request, npcId: str, timestamp: float):
@@ -147,7 +157,15 @@ async def memories(request: Request, npcId: str):
 @app.post("/add_in_memory")
 async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data: AddInMemoryData):
     print(data)
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=1, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique)
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique)
+    QUERY_BUFFER[query.experiment_id] = query
+    background_tasks.add_task(process, query)
+    return {"id": query.experiment_id}
+
+@app.post("/mass_add_in_memory")
+async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
+    print(data)
+    query = Query(query_name="mass_add_in_memory", query_sequence=1, input="", vector=None, query_type=1, npcId=data.memories[0]['npcId'], memories=data.memories, timestamp=0, lastAccess=0, importance="", checker=False, memory="")
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -166,6 +184,13 @@ async def result(request: Request, query_id: str):
             resp = {}
             if (QUERY_BUFFER[query_id].query_type == 0):
                 resp = { 'vector': QUERY_BUFFER[query_id].result }
+            elif (QUERY_BUFFER[query_id].query_type == 1):
+                res = QUERY_BUFFER[query_id].result
+                for memory in res:
+                    if "_id" in memory:
+                        del memory["_id"]
+                del QUERY_BUFFER[query_id]
+                return res
             else:
                 res = QUERY_BUFFER[query_id].result
                 if "_id" in res:
@@ -184,6 +209,15 @@ def process(query):
         res = embedding_model.embed_query(query.input)
     elif (query.query_type == 1):
         print('Query Type is 1')
+        res = []
+        for memory in query.memories:
+            vector = embedding_model.embed_query(memory['memory'])
+            addOnlyIfUnique = False
+            if 'addOnlyIfUnique' in memory:
+                addOnlyIfUnique = memory['addOnlyIfUnique']
+            res.append(addMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
+    elif (query.query_type == 2):
+        print('Query Type is 2')
         query.vector = embedding_model.embed_query(query.memory)
         res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
     else:

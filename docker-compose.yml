@@ -1,0 +1,16 @@
+version: "3"
+services:
+  node:
+    image: zerefdragoneel/transformers-api:v11
+    volumes:
+      - ~/raid_party_do_not_delete/npcdb:/db
+    ports:
+      - 3006:3000
+    deploy:
+      resources:
+        limits:
+          cpus: '5000'
+          memory: 10000M
+        reservations:
+          cpus: '0.0001'
+          memory: 5000M

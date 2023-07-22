@@ -170,10 +170,17 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 @app.post("/mass_add_in_memory")
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     print(data)
-    query = Query(query_name="mass_add_in_memory", query_sequence=1, input="", vector=None, query_type=1, npcId=data.memories[0]['npcId'], memories=data.memories, timestamp=0, lastAccess=0, importance="", checker=False, memory="")
-    QUERY_BUFFER[query.experiment_id] = query
-    background_tasks.add_task(process, query)
-    return {"id": query.experiment_id}
+    res = []
+    for memory in data.memories:
+        vector = embedding_model.embed_query(memory['memory'])
+        addOnlyIfUnique = False
+        if 'addOnlyIfUnique' in memory:
+            addOnlyIfUnique = memory['addOnlyIfUnique']
+        res.append(addMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
+    for memory in res:
+        if "_id" in memory:
+            del memory["_id"]
+    return res
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):

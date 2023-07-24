@@ -84,13 +84,15 @@ embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
 # Initialize the vectorstore as empty
 embedding_size = 768
 
-npcID_to_retriever = {}
+npcID_to_base_retriever = {}
+npcID_to_relationship_retriever = {}
 
 
-def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
+#### Base memory functions ####
+def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
 
     #If the npcId has not been seen before, create a memory database and retriever for it
-    if npcId not in npcID_to_retriever.keys():
+    if npcId not in npcID_to_base_retriever.keys():
         table = db_init.create_table(
                     npcId,
                     data=[
@@ -103,7 +105,7 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
                 )
         vectordb = LanceDB(embedding = embedding_model , connection=table)
         retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectordb, other_score_keys = ['importance'] , decay_rate=.01, k=1) 
-        npcID_to_retriever[npcId] = retriever
+        npcID_to_base_retriever[npcId] = retriever
 
     memoryObject = {
         "timestamp": timestamp,
@@ -112,7 +114,7 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
         "importance": importance
     }
 
-    npcID_to_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
+    npcID_to_base_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
 
     print('Added memory', memory)
 
@@ -127,11 +129,11 @@ def addMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=
     }
 
 
-def getRelevantMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
-    if npcId not in npcID_to_retriever.keys():
+def getRelevantBaseMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
+    if npcId not in npcID_to_base_retriever.keys():
         return []
 
-    retriever = npcID_to_retriever[npcId]
+    retriever = npcID_to_base_retriever[npcId]
     relevant = []
 
     for query in queries:
@@ -177,10 +179,94 @@ def getRelevantMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
     return relevant
 
 
-def getRelevantMemories(memories, targetVectors, query):
-    winner = compare(query, targetVectors)
+#### Relationship memory methods ####
+def addRelationshipMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
 
-    winMemory = []
-    for win in winner:
-        winMemory.append(memories[win["index"]])
-    return winMemory    
+    #If the npcId has not been seen before, create a memory database and retriever for it
+    if npcId not in npcID_to_relationship_retriever.keys():
+        table = db_init.create_table(
+                    npcId,
+                    data=[
+                        {
+                            "vector": embedding_model.embed_query("<NULL ENTRY>"),
+                            "text": "<NULL ENTRY>",
+                        }
+                    ],
+                    mode="overwrite",
+                )
+        vectordb = LanceDB(embedding = embedding_model , connection=table)
+        retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectordb, other_score_keys = ['importance'] , decay_rate=.01, k=1) 
+        npcID_to_relationship_retriever[npcId] = retriever
+
+    memoryObject = {
+        "timestamp": timestamp,
+        "lastAccess": lastAccess,
+        "vector": vector,
+        "importance": importance
+    }
+
+    npcID_to_relationship_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
+
+    print('[relationship] Added memory', memory)
+
+    return {
+        "npcId": npcId,
+        "memory": memory,
+        "timestamp": timestamp,
+        "lastAccess": lastAccess,
+        "vector": vector,
+        "importance": importance,
+        "recency": datetime.datetime.now().timestamp() - memoryObject["lastAccess"]
+    }
+
+
+def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
+    if npcId not in npcID_to_relationship_retriever.keys():
+        return []
+
+    retriever = npcID_to_relationship_retriever[npcId]
+    relevant = []
+
+    for query in queries:
+        # vector = embedding_model.embed_query(query)
+        retriever.k = top_k
+        retrieved_docs = retriever.get_relevant_documents(query)
+        retriever.k = 1
+
+        for doc in retrieved_docs:
+            timestamp = 0
+            lastAccess = 0
+            importance = 0
+            vector = ""
+
+            for key, value in doc.metadata.items():
+                if "timestamp" in key.lower():
+                    timestamp = value
+                elif "lastaccess" in key.lower():
+                    lastAccess = value
+                elif "importance" in key.lower():
+                    importance = value
+                elif "vector" in key.lower():
+                    vector = value
+                    
+            memory = {
+                "npcId": npcId,
+                "memory": doc.page_content,
+                "timestamp": timestamp,
+                "lastAccess": lastAccess,
+                "vector": vector,
+                "importance": importance,
+                "recency": datetime.datetime.now().timestamp() - lastAccess
+            }
+            if memory not in relevant:
+                relevant.append(memory)
+                
+            #sort them based on recency
+            relevant.sort(key=lambda x: x["recency"], reverse=True)
+            if max_memories>0:
+                relevant = relevant[:max_memories]
+
+    print('[relationship] Returning retrieved relevant memories from query:', queries)
+    return relevant
+
+

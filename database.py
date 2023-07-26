@@ -87,6 +87,8 @@ embedding_size = 768
 npcID_to_base_retriever = {}
 npcID_to_relationship_retriever = {}
 
+def getRelationshipMemoriesRetrieved():
+    return npcID_to_relationship_retriever
 
 #### Base memory functions ####
 def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):

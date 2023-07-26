@@ -9,7 +9,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import embedding_model, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import embedding_model, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 # from vectorizer import vectorize
@@ -180,6 +180,7 @@ async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks,
     for memory in res:
         if "_id" in memory:
             del memory["_id"]
+    saveMemories()
     return res
 
 @app.get("/vectorize")
@@ -214,6 +215,52 @@ async def result(request: Request, query_id: str):
     else:
         return {"status": "finished"}
 
+@app.get("/relationship_query")
+async def relationship_query(request: Request, npcId: str, input: str, max_memories = -1, top_k: int = 1):
+    res = getRelevantRelationshipMemoriesFrom([input], npcId, max_memories=max_memories, top_k=top_k)
+    return res
+
+@app.post("/relationship_add_in_memory")
+async def relationship_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
+    res = []
+    for memory in data.memories:
+        vector = embedding_model.embed_query(memory['memory'])
+        addOnlyIfUnique = False
+        if 'addOnlyIfUnique' in memory:
+            addOnlyIfUnique = memory['addOnlyIfUnique']
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+        if "id" in mem:
+            del mem["id"]
+        res.append(mem)
+    return res
+
+@app.get("/relationship_memories")
+async def relationship_memories(request: Request, npcId: str):
+    retriever = getRelationshipMemoriesRetrieved()[npcId]
+    memories = []
+    for x in retriever.memory_stream:
+        timestamp = 0
+        lastAccess = 0
+        importance = 0
+
+        for key, value in x.metadata.items():
+            if "timestamp" in key.lower():
+                timestamp = value
+            elif "lastaccess" in key.lower():
+                lastAccess = value
+            elif "importance" in key.lower():
+                importance = value
+
+        memories.append({
+                "npcId": npcId,
+                "timestamp":timestamp,
+                "lastAccess":lastAccess,
+                "importance":importance,
+                "memory":x.page_content
+            })
+    
+    return memories
+
 def process(query):
     res = None
     if (query.query_type == 0):
@@ -238,16 +285,18 @@ def process(query):
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"
 
-    if (query.query_type == 1):
-        import _pickle as cPickle
-        import bz2
-        #Save the retriever to disk after every memory addition
-        try:
-            with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
-                cPickle.dump(npcID_to_base_retriever, f)
-        except Exception:
-            pass
+    if (query.query_type == 1 or query.query_type == 2):
+        saveMemories()
 
+def saveMemories():
+    import _pickle as cPickle
+    import bz2
+    #Save the retriever to disk after every memory addition
+    try:
+        with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
+            cPickle.dump(npcID_to_base_retriever, f)
+    except Exception:
+        pass
 
 @app.get("/backlog/")
 def return_backlog():

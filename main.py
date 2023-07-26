@@ -9,7 +9,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import embedding_model, npcID_to_retriever, addMemory, getRelevantMemoriesFrom
+from database import embedding_model, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 # from vectorizer import vectorize
@@ -79,13 +79,13 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
     #top_ns: number of salient questions generated for the last_k memories
     #top_k: number of memories retreived for each salient question
     memories = []
-    for x in npcID_to_retriever[npcId].memory_stream[-last_k:]:
+    for x in npcID_to_base_retriever[npcId].memory_stream[-last_k:]:
         memories.append(x.page_content)
     # print(memories, type(memories[0]))
 
     queries = getMemoryQueries(memories, top_ns)
     # print('=========', queries[0])
-    relevantMemories = getRelevantMemoriesFrom(queries, npcId, top_k)
+    relevantMemories = getRelevantBaseMemoriesFrom(queries, npcId, top_k)
 
     relevantMemoriesString = []
     for memory in relevantMemories:
@@ -112,7 +112,7 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
         # print(memory)
         vector = embedding_model.embed_query(memory)
         # print("vector done")
-        returnedMemory = addMemory(npcId, memory, timestamp, timestamp, vector, -1)
+        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, vector, -1)
         if "_id" in returnedMemory:
             del returnedMemory["_id"]
             
@@ -124,7 +124,7 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
 @app.get("/query")
 async def query(request: Request, npcId: str, input: str, top_k: int = 1):
     print(npcId, ' - ', input)
-    memories = getRelevantMemoriesFrom([input], npcId, top_k)
+    memories = getRelevantBaseMemoriesFrom([input], npcId, top_k)
     res = []
     for memory in memories:
         res.append(memory["memory"])
@@ -133,10 +133,10 @@ async def query(request: Request, npcId: str, input: str, top_k: int = 1):
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
-    if npcId not in npcID_to_retriever.keys():
+    if npcId not in npcID_to_base_retriever.keys():
         return []
     memories = []
-    for x in npcID_to_retriever[npcId].memory_stream:
+    for x in npcID_to_base_retriever[npcId].memory_stream:
         timestamp = 0
         lastAccess = 0
         importance = 0
@@ -176,10 +176,11 @@ async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks,
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
-        res.append(addMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
+        res.append(addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
     for memory in res:
         if "_id" in memory:
             del memory["_id"]
+    saveMemories()
     return res
 
 @app.get("/vectorize")
@@ -214,6 +215,52 @@ async def result(request: Request, query_id: str):
     else:
         return {"status": "finished"}
 
+@app.get("/relationship_query")
+async def relationship_query(request: Request, npcId: str, input: str, max_memories = -1, top_k: int = 1):
+    res = getRelevantRelationshipMemoriesFrom([input], npcId, max_memories=max_memories, top_k=top_k)
+    return res
+
+@app.post("/relationship_add_in_memory")
+async def relationship_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
+    res = []
+    for memory in data.memories:
+        vector = embedding_model.embed_query(memory['memory'])
+        addOnlyIfUnique = False
+        if 'addOnlyIfUnique' in memory:
+            addOnlyIfUnique = memory['addOnlyIfUnique']
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+        if "id" in mem:
+            del mem["id"]
+        res.append(mem)
+    return res
+
+@app.get("/relationship_memories")
+async def relationship_memories(request: Request, npcId: str):
+    retriever = getRelationshipMemoriesRetrieved()[npcId]
+    memories = []
+    for x in retriever.memory_stream:
+        timestamp = 0
+        lastAccess = 0
+        importance = 0
+
+        for key, value in x.metadata.items():
+            if "timestamp" in key.lower():
+                timestamp = value
+            elif "lastaccess" in key.lower():
+                lastAccess = value
+            elif "importance" in key.lower():
+                importance = value
+
+        memories.append({
+                "npcId": npcId,
+                "timestamp":timestamp,
+                "lastAccess":lastAccess,
+                "importance":importance,
+                "memory":x.page_content
+            })
+    
+    return memories
+
 def process(query):
     res = None
     if (query.query_type == 0):
@@ -227,26 +274,29 @@ def process(query):
             addOnlyIfUnique = False
             if 'addOnlyIfUnique' in memory:
                 addOnlyIfUnique = memory['addOnlyIfUnique']
-            res.append(addMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
+            res.append(addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
     elif (query.query_type == 2):
         print('Query Type is 2')
         query.vector = embedding_model.embed_query(query.memory)
-        res = addMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
+        res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
     else:
         print("No Query Type was present")
         
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"
 
-    if (query.query_type == 1):
-        import _pickle as cPickle
-        import bz2
-        #Save the retriever to disk after every memory addition
-        try:
-            with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
-                cPickle.dump(npcID_to_retriever, f)
-        except Exception:
-            pass
+    if (query.query_type == 1 or query.query_type == 2):
+        saveMemories()
+
+def saveMemories():
+    import _pickle as cPickle
+    import bz2
+    #Save the retriever to disk after every memory addition
+    try:
+        with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
+            cPickle.dump(npcID_to_base_retriever, f)
+    except Exception:
+        pass
 
 @app.get("/backlog/")
 def return_backlog():

@@ -12,7 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import embedding_model, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
+import atexit
 # from vectorizer import vectorize
+
+def exit_handler():
+    print("saving memories")
+    saveMemories()
+
+atexit.register(exit_handler)
 
 class MemoryData():
     npcId: str
@@ -167,34 +174,17 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
-saved_memories_count = 0
-
 @app.post("/mass_add_in_memory")
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
-    global saved_memories_count
     print(data)
-    res = []
-    for memory in data.memories:
-        vector = embedding_model.embed_query(memory['memory'])
-        addOnlyIfUnique = False
-        if 'addOnlyIfUnique' in memory:
-            addOnlyIfUnique = memory['addOnlyIfUnique']
-        res.append(addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
-    for memory in res:
-        if "_id" in memory:
-            del memory["_id"]
-    print("added memories, saving")
-    if saved_memories_count > 10:
-        saved_memories_count = 0
-        saveMemories()
-    else:
-        saved_memories_count += 1
-    print("saved, returning:", res)
-    return res
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None)
+    QUERY_BUFFER[query.experiment_id] = query
+    background_tasks.add_task(process, query)
+    return {"id": query.experiment_id}
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -208,6 +198,7 @@ async def result(request: Request, query_id: str):
                 resp = { 'vector': QUERY_BUFFER[query_id].result }
             elif (QUERY_BUFFER[query_id].query_type == 1):
                 res = QUERY_BUFFER[query_id].result
+                print("response:", res)
                 for memory in res:
                     if "_id" in memory:
                         del memory["_id"]
@@ -283,7 +274,10 @@ def process(query):
             addOnlyIfUnique = False
             if 'addOnlyIfUnique' in memory:
                 addOnlyIfUnique = memory['addOnlyIfUnique']
-            res.append(addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique))
+            print("adding memory")
+            newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+            print("memory added:", newMemory)
+            res.append(newMemory)
     elif (query.query_type == 2):
         print('Query Type is 2')
         query.vector = embedding_model.embed_query(query.memory)
@@ -294,8 +288,8 @@ def process(query):
     QUERY_BUFFER[query.experiment_id].result = res
     QUERY_BUFFER[query.experiment_id].status = "done"
 
-    if (query.query_type == 1 or query.query_type == 2):
-        saveMemories()
+    #if (query.query_type == 1 or query.query_type == 2):
+    #    saveMemories()
 
 def saveMemories():
     import _pickle as cPickle

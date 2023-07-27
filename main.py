@@ -167,8 +167,11 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
+saved_memories_count = 0
+
 @app.post("/mass_add_in_memory")
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
+    global saved_memories_count
     print(data)
     res = []
     for memory in data.memories:
@@ -181,7 +184,11 @@ async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks,
         if "_id" in memory:
             del memory["_id"]
     print("added memories, saving")
-    saveMemories()
+    if saved_memories_count > 10:
+        saved_memories_count = 0
+        saveMemories()
+    else:
+        saved_memories_count += 1
     print("saved, returning:", res)
     return res
 

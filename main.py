@@ -180,7 +180,9 @@ async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks,
     for memory in res:
         if "_id" in memory:
             del memory["_id"]
+    print("added memories, saving")
     saveMemories()
+    print("saved, returning:", res)
     return res
 
 @app.get("/vectorize")

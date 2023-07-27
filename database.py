@@ -104,6 +104,7 @@ def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, chec
                         }
                     ],
                     mode="overwrite",
+                    on_bad_vectors = 'drop'
                 )
         vectordb = LanceDB(embedding = embedding_model , connection=table)
         retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectordb, other_score_keys = ['importance'] , decay_rate=.01, k=1) 

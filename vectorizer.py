@@ -1,5 +1,4 @@
 from sentence_transformers import util
-import json
 from constants import MIN_COS_SIM_VALUE
 
 # model = SentenceTransformer('paraphrase-MiniLM-L6-v2')

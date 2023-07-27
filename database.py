@@ -118,8 +118,6 @@ def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, chec
 
     npcID_to_base_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
 
-    print('Added memory', memory)
-
     return {
         "npcId": npcId,
         "memory": memory,
@@ -177,7 +175,6 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
             if max_memories>0:
                 relevant = relevant[:max_memories]
 
-    print('Returning retrieved relevant memories from query:', queries)
     return relevant
 
 
@@ -208,8 +205,6 @@ def addRelationshipMemory(npcId, memory, timestamp, lastAccess, vector, importan
     }
 
     npcID_to_relationship_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
-
-    print('[relationship] Added memory', memory)
 
     return {
         "npcId": npcId,
@@ -268,7 +263,6 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
             if max_memories>0:
                 relevant = relevant[:max_memories]
 
-    print('[relationship] Returning retrieved relevant memories from query:', queries)
     return relevant
 
 

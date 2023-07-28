@@ -75,7 +75,11 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
                 results[buffer_idx] = (doc, relevance)
         return results
 
-embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
+model_name = "intfloat/e5-base-v2"
+model_kwargs = {'device': 'cpu'}
+embedding_model = HuggingFaceEmbeddings(
+    model_name=model_name,
+    model_kwargs=model_kwargs)
 # Initialize the vectorstore as empty
 embedding_size = 768
 

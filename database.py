@@ -1,30 +1,25 @@
 import datetime
-import json
-import numpy as np
-import pymongo 
 
-import _pickle as cPickle
-import os
-import bz2
-
-from constants import DB_NAME, MONGO_URL, COL_NAME
-from vectorizer import compare
-
-from constants import OPENAI_KEY
-
-from langchain.vectorstores import LanceDB
-from langchain.docstore import InMemoryDocstore
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings, SentenceTransformerEmbeddings 
+from langchain.embeddings import HuggingFaceEmbeddings 
 
 from langchain.retrievers import TimeWeightedVectorStoreRetriever
 from langchain.schema import Document
 
+from typing import Dict, List, Optional, Tuple
 
-from typing import Any, Dict, List, Optional, Tuple
-from copy import deepcopy
+import os
+import getpass
+from pymongo import MongoClient
 
-import lancedb
-db_init = lancedb.connect("./lancedb")
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+
+uri = "mongodb+srv://hostwizard:Pm8UFDl4jKuFkbvV@vector-memories.l2aoaqn.mongodb.net/?retryWrites=true&w=majority"
+
+# Create a new client and connect to the server
+client = MongoClient(uri, server_api=ServerApi('1'))
+#check if db exists
+db = client['vector-memories']
 
 def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
     """Get the hours passed between two datetime objects."""
@@ -92,42 +87,53 @@ def getRelationshipMemoriesRetrieved():
 
 #### Base memory functions ####
 def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
+    try:
+        if (vector == None):
+            print("empty vector")
+            return None
+        
+        #check if vector is a numpy array
+        if (not type(vector) == list):
+            vector = vector.tolist()
 
-    #If the npcId has not been seen before, create a memory database and retriever for it
-    if npcId not in npcID_to_base_retriever.keys():
-        table = db_init.create_table(
-                    npcId,
-                    data=[
-                        {
-                            "vector": embedding_model.embed_query("<NULL ENTRY>"),
-                            "text": "<NULL ENTRY>",
-                        }
-                    ],
-                    mode="overwrite",
-                    on_bad_vectors = 'drop'
-                )
-        vectordb = LanceDB(embedding = embedding_model , connection=table)
-        retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectordb, other_score_keys = ['importance'] , decay_rate=.01, k=1) 
-        npcID_to_base_retriever[npcId] = retriever
+        if not db.list_collection_names(filter={'name': npcId}):
+            # If the npcId collection does not exist, create it
+            db.create_collection(npcId)
 
-    memoryObject = {
-        "timestamp": timestamp,
-        "lastAccess": lastAccess,
-        "vector": vector,
-        "importance": importance
-    }
+            # And create an initial document
+            db[npcId].insert_one({
+                "vector": embedding_model.embed_query("<NULL ENTRY>"),  # Convert to list for JSON serialization
+                "text": "<NULL ENTRY>",
+                "timestamp": timestamp,
+                "lastAccess": lastAccess,
+                "importance": importance
+            })
 
-    npcID_to_base_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
+        # Create the memory object and insert it into the collection
+        memoryObject = {
+            "timestamp": timestamp,
+            "lastAccess": lastAccess,
+            "vector": vector,  # Convert to list for JSON serialization
+            "importance": importance
+        }
 
-    return {
-        "npcId": npcId,
-        "memory": memory,
-        "timestamp": timestamp,
-        "lastAccess": lastAccess,
-        "vector": vector,
-        "importance": importance,
-        "recency": datetime.datetime.now().timestamp() - memoryObject["lastAccess"]
-    }
+        db[npcId].insert_one({
+            "page_content": memory, 
+            "metadata": memoryObject
+        })
+
+        return {
+            "npcId": npcId,
+            "memory": memory,
+            "timestamp": timestamp,
+            "lastAccess": lastAccess,
+            "vector": vector,  # Convert to list for JSON serialization
+            "importance": importance,
+            "recency": datetime.datetime.now().timestamp() - memoryObject["lastAccess"]
+        }
+    except Exception as e:
+        import logging
+        logging.error(f'An error occurred: {str(e)}')
 
 
 def getRelevantBaseMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
@@ -178,51 +184,50 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
 
     return relevant
 
-
-#### Relationship memory methods ####
 def addRelationshipMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
+    if not db.list_collection_names(filter={'name': npcId + "_relationship"}):
+        # If the npcId collection does not exist, create it
+        db.create_collection(npcId + "_relationship")
 
-    #If the npcId has not been seen before, create a memory database and retriever for it
-    if npcId not in npcID_to_relationship_retriever.keys():
-        table = db_init.create_table(
-                    npcId,
-                    data=[
-                        {
-                            "vector": embedding_model.embed_query("<NULL ENTRY>"),
-                            "text": "<NULL ENTRY>",
-                        }
-                    ],
-                    mode="overwrite",
-                )
-        vectordb = LanceDB(embedding = embedding_model , connection=table)
-        retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectordb, other_score_keys = ['importance'] , decay_rate=.01, k=1) 
-        npcID_to_relationship_retriever[npcId] = retriever
+        # And create an initial document
+        db[npcId].insert_one({
+            "vector": embedding_model.embed_query("<NULL ENTRY>"),  # Convert to list for JSON serialization
+            "text": "<NULL ENTRY>",
+            "timestamp": timestamp,
+            "lastAccess": lastAccess,
+            "importance": importance
+        })
 
+    # Create the memory object and insert it into the collection
     memoryObject = {
         "timestamp": timestamp,
         "lastAccess": lastAccess,
-        "vector": vector,
+        "vector": vector,  # Convert to list for JSON serialization
         "importance": importance
     }
 
-    npcID_to_relationship_retriever[npcId].add_documents([Document(page_content=memory, metadata=memoryObject)])
+    db[npcId + "_relationship"].insert_one({
+        "page_content": memory, 
+        "metadata": memoryObject
+    })
 
     return {
         "npcId": npcId,
         "memory": memory,
         "timestamp": timestamp,
         "lastAccess": lastAccess,
-        "vector": vector,
+        "vector": vector,  # Convert to list for JSON serialization
         "importance": importance,
         "recency": datetime.datetime.now().timestamp() - memoryObject["lastAccess"]
     }
+
 
 
 def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
     if npcId not in npcID_to_relationship_retriever.keys():
         return []
 
-    retriever = npcID_to_relationship_retriever[npcId]
+    retriever = npcID_to_relationship_retriever[npcId + "_relationship"]
     relevant = []
 
     for query in queries:

@@ -1,3 +1,4 @@
+import traceback
 from envReader import read, getValue
 read()
 
@@ -12,14 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import embedding_model, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
-import atexit
-# from vectorizer import vectorize
 
-def exit_handler():
-    print("saving memories")
-    saveMemories()
+logging.basicConfig(filename='app.log', filemode='w', level=logging.INFO)
 
-atexit.register(exit_handler)
 
 class MemoryData():
     npcId: str
@@ -40,8 +36,8 @@ class AddInMemoryData(BaseModel):
     importance: str
     addOnlyIfUnique: bool = False
     
-logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
-LOGGER = logging.getLogger(__name__)
+#logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(asctime)s - %(name)s - %(message)s")
+#LOGGER = logging.getLogger(__name__)
 
 EXPERIMENTS_BASE_DIR = "/experiments/"
 QUERY_BUFFER = {}
@@ -174,6 +170,8 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 
 @app.post("/mass_add_in_memory")
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
+    for memory in data.memories:
+        memory['vector'] = embedding_model.embed_query(memory['memory'])
     query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
@@ -188,27 +186,34 @@ async def root(request: Request, background_tasks: BackgroundTasks, input: str):
 
 @app.get("/result")
 async def result(request: Request, query_id: str):
-    if query_id in QUERY_BUFFER:
-        if QUERY_BUFFER[query_id].status == "done":
-            resp = {}
-            if (QUERY_BUFFER[query_id].query_type == 0):
-                resp = { 'vector': QUERY_BUFFER[query_id].result }
-            elif (QUERY_BUFFER[query_id].query_type == 1):
-                res = QUERY_BUFFER[query_id].result
-                for memory in res:
-                    if "_id" in memory:
-                        del memory["_id"]
+    try:
+        if query_id in QUERY_BUFFER:
+            if QUERY_BUFFER[query_id] == None:
+                return {"status": "finished"}
+            if QUERY_BUFFER[query_id].status == "done":
+                resp = {}
+                if (QUERY_BUFFER[query_id].query_type == 0):
+                    resp = { 'vector': QUERY_BUFFER[query_id].result }
+                elif (QUERY_BUFFER[query_id].query_type == 1):
+                    res = QUERY_BUFFER[query_id].result
+                    print("query res:", res)
+                    for memory in res:
+                        if "_id" in memory:
+                            del memory["_id"]
+                    del QUERY_BUFFER[query_id]
+                    return res
+                else:
+                    res = QUERY_BUFFER[query_id].result
+                    if "_id" in res:
+                        del res["_id"]
+                    return res
                 del QUERY_BUFFER[query_id]
-                return res
-            else:
-                res = QUERY_BUFFER[query_id].result
-                if "_id" in res:
-                    del res["_id"]
-                return res
-            del QUERY_BUFFER[query_id]
-            return resp
-        return {"status": QUERY_BUFFER[query_id].status}
-    else:
+                return resp
+            return {"status": QUERY_BUFFER[query_id].status}
+        else:
+            return {"status": "finished"}
+    except Exception as e:
+        print(e)
         return {"status": "finished"}
 
 @app.get("/relationship_query")
@@ -232,7 +237,7 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
 
 @app.get("/relationship_memories")
 async def relationship_memories(request: Request, npcId: str):
-    retriever = getRelationshipMemoriesRetrieved()[npcId]
+    retriever = getRelationshipMemoriesRetrieved()[npcId + "_relationship"]
     memories = []
     for x in retriever.memory_stream:
         timestamp = 0
@@ -258,47 +263,31 @@ async def relationship_memories(request: Request, npcId: str):
     return memories
 
 def process(query):
-    res = None
-    if (query.query_type == 0):
-        res = embedding_model.embed_query(query.input)
-    elif (query.query_type == 1):
-        res = []
-        for memory in query.memories:
-            print("calculating vector for:", memory['memory'])
-            vector = None
-            try:
-                vector = embedding_model.embed_query(memory['memory'])
-            except:
-                print("could not calculate vector for:", memory['memory'])
-                continue
-            print("vector calculated")
-            print("got vector: ", vector, "for:", memory['memory'])
-            addOnlyIfUnique = False
-            if 'addOnlyIfUnique' in memory:
-                addOnlyIfUnique = memory['addOnlyIfUnique']
-            newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
-            res.append(newMemory)
-    elif (query.query_type == 2):
-        query.vector = embedding_model.embed_query(query.memory)
-        res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
-    else:
-        print("No Query Type was present")
-        
-    QUERY_BUFFER[query.experiment_id].result = res
-    QUERY_BUFFER[query.experiment_id].status = "done"
-
-    #if (query.query_type == 1 or query.query_type == 2):
-    #    saveMemories()
-
-def saveMemories():
-    import _pickle as cPickle
-    import bz2
-    #Save the retriever to disk after every memory addition
     try:
-        with bz2.BZ2File("/db/retreiver.pbz2", "w") as f: 
-            cPickle.dump(npcID_to_base_retriever, f)
-    except Exception:
-        pass
+        res = None
+        if (query.query_type == 0):
+            res = embedding_model.embed_query(query.input)
+        elif (query.query_type == 1):
+            res = []
+            for memory in query.memories:
+                vector = memory['vector']
+                addOnlyIfUnique = False
+                print(memory['memory'], type(memory['memory']))
+                if 'addOnlyIfUnique' in memory:
+                    addOnlyIfUnique = memory['addOnlyIfUnique']
+                newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+                if not newMemory is None:
+                    res.append(newMemory)
+        elif (query.query_type == 2):
+            query.vector = embedding_model.embed_query(query.memory)
+            res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
+        else:
+            print("No Query Type was present")
+            
+        QUERY_BUFFER[query.experiment_id].result = res
+        QUERY_BUFFER[query.experiment_id].status = "done"
+    except Exception as e:
+            print(e)
 
 @app.get("/backlog/")
 def return_backlog():

@@ -18,7 +18,6 @@ uri = "mongodb+srv://zeref94:V7a2zauORu79GH4u@npc-memory.wyxvdjw.mongodb.net/?re
 
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
-#check if db exists
 db = client['vector-memories']
 
 def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
@@ -85,9 +84,13 @@ embedding_size = 768
 
 npcID_to_base_retriever = {}
 npcID_to_relationship_retriever = {}
+npcID_to_plan_retriever = {}
 
 def getRelationshipMemoriesRetrieved():
     return npcID_to_relationship_retriever
+
+def getPlanMemoriesRetrieved():
+    return npcID_to_plan_retriever
 
 #### Base memory functions ####
 def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
@@ -136,8 +139,7 @@ def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, chec
             "recency": datetime.datetime.now().timestamp() - memoryObject["lastAccess"]
         }
     except Exception as e:
-        import logging
-        logging.error(f'An error occurred: {str(e)}')
+        print(e)
 
 
 def getRelevantBaseMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
@@ -275,4 +277,117 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
 
     return relevant
 
+def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
+    if npcId not in npcID_to_plan_retriever.keys():
+        return []
 
+    retriever = npcID_to_plan_retriever[npcId + "_plan"]
+    relevant = []
+
+    for query in queries:
+        # vector = embedding_model.embed_query(query)
+        retriever.k = top_k
+        retrieved_docs = retriever.get_relevant_documents(query)
+        retriever.k = 1
+
+        for doc in retrieved_docs:
+            timestamp = 0
+            importance = 0
+            vector = ""
+            recalled_summary = ""
+            superset_command_of_god_id = ""
+            planID = ""
+            intendedPeople = []
+            routine_entries = []
+
+            for key, value in doc.metadata.items():
+                if "timestamp" in key.lower():
+                    timestamp = value
+                elif "importance" in key.lower():
+                    importance = value
+                elif "vector" in key.lower():
+                    vector = value
+                elif "recalled_summary" in key.lower():
+                    recalled_summary = value
+                elif "superset_command_of_god_id" in key.lower():
+                    superset_command_of_god_id = value
+                elif "planID" in key.lower():
+                    planID = value
+                elif "intendedPeople" in key.lower():
+                    intendedPeople = value
+                elif "routine_entries" in key.lower():
+                    routine_entries = value
+                    
+            memory = {
+                "npcId": npcId,
+                "timestamp": timestamp,
+                "recalled_summary": recalled_summary,
+                "superset_command_of_god_id": superset_command_of_god_id,
+                "planID": planID,
+                "intendedPeople": intendedPeople,
+                "routine_entries": routine_entries,
+                "vector": vector,
+                "importance": importance,
+                "recency": datetime.datetime.now().timestamp() - timestamp
+            }
+            if memory not in relevant:
+                relevant.append(memory)
+                
+            #sort them based on recency
+            relevant.sort(key=lambda x: x["recency"], reverse=True)
+            if max_memories>0:
+                relevant = relevant[:max_memories]
+
+    return relevant
+
+def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, routine_entries, importance, vector):
+    print("lala", npcId)
+    print(db)
+    print("exists:", db.list_collection_names(filter={'name': npcId + "_plan"}))
+    print("lala2")
+    if not db.list_collection_names(filter={'name': npcId + "_plan"}):
+        # If the npcId collection does not exist, create it
+        db.create_collection(npcId + "_plan")
+
+        # And create an initial document
+        db[npcId].insert_one({
+            "vector": embedding_model.embed_query("<NULL ENTRY>"),  # Convert to list for JSON serialization
+            "text": "<NULL ENTRY>",
+            "timestamp": timestamp,
+            "importance": importance,
+            "recalled_summary": recalled_summary,
+            "superset_command_of_god_id": superset_command_of_god_id,
+            "planID": planID,
+            "intendedPeople": intendedPeople,
+            "routine_entries": routine_entries
+        })
+
+    # Create the memory object and insert it into the collection
+    memoryObject = {
+        "timestamp": timestamp,
+        "vector": vector,
+        "recalled_summary": recalled_summary,
+        "superset_command_of_god_id": superset_command_of_god_id,
+        "planID": planID,
+        "intendedPeople": intendedPeople,
+        "routine_entries": routine_entries,
+        "importance": importance
+    }
+
+    db[npcId + "_plan"].insert_one({
+        "page_content": recalled_summary, 
+        "metadata": memoryObject
+    })
+    
+    return {
+        "npcId": npcId,
+        "vector": vector,
+        "recalled_summary": recalled_summary,
+        "timestamp": timestamp,
+        "superset_command_of_god_id": superset_command_of_god_id,
+        "planID": planID,
+        "intendedPeople": intendedPeople,
+        "routine_entries": routine_entries,
+        "importance": importance,
+        "recency": datetime.datetime.now().timestamp() - memoryObject["timestamp"]
+    }

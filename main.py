@@ -11,7 +11,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addPlanMemory, embedding_model, getPlanMemoriesRetrieved, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, embedding_model, getPlanMemoriesRetrieved, getRelationshipMemoriesRetrieved, getRelevantPlanMemories, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
@@ -277,11 +277,13 @@ async def relationship_memories(request: Request, npcId: str):
 
 @app.get("/plan_memories")
 async def plan_memories(request: Request, npcId: str):
+    tempNpcId = npcId
+    npcId = npcId + "_plan"
     retriever = getPlanMemoriesRetrieved()
     if npcId not in retriever:
         return []
 
-    retriever = retriever[npcId + "_plan"]    
+    retriever = retriever[npcId]    
     memories = []
     for x in retriever.memory_stream:
         timestamp = 0
@@ -312,7 +314,7 @@ async def plan_memories(request: Request, npcId: str):
                 routine_entries = value
                     
             memory = {
-                "npcId": npcId,
+                "npcId": tempNpcId,
                 "timestamp": timestamp,
                 "recalled_summary": recalled_summary,
                 "superset_command_of_god_id": superset_command_of_god_id,
@@ -323,6 +325,8 @@ async def plan_memories(request: Request, npcId: str):
                 "importance": importance,
                 "recency": datetime.datetime.now().timestamp() - timestamp
             }
+
+            memories.append(memory)
     
     return memories
 
@@ -332,14 +336,12 @@ async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, da
     print(data)
     vector = embedding_model.embed_query(data.recalled_summary)
     print(vector)
-    memory = addBaseMemory(data.npcId, data.recalled_summary, data.timestamp, data.timestamp, vector, data.importance, False)
-    print(memory)
-    #memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.routine_entries, data.importance, vector)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.routine_entries, data.importance, vector)
     return memory
 
 @app.get("/plan_query")
 async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, top_k: int = 1):
-    res = getRelevantRelationshipMemoriesFrom([input], npcId, max_memories=max_memories, top_k=top_k)
+    res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, top_k=top_k)
     return res
 
 def process(query):

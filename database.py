@@ -352,6 +352,12 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
 
     return relevant
 
+def delete_plan_memories(planId):
+    for npcId in npcID_to_plan_retriever:
+        for doc in npcID_to_plan_retriever[npcId].memory_stream:
+            if doc.metadata["planID"] == planId:
+                npcID_to_plan_retriever[npcId].remove_document(doc)
+
 def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
     tempNpcId = npcId
     npcId = npcId + "_plan"
@@ -402,35 +408,3 @@ def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_comma
         "plannedDate": plannedDate,
         "recency": datetime.datetime.now().timestamp() - timestamp
     }
-
-def delete_plan_memories(planId):
-    for npcId in npcID_to_plan_retriever:
-        for doc in npcID_to_plan_retriever[npcId].memory_stream:
-            if doc.metadata["planID"] == planId:
-                npcID_to_plan_retriever[npcId].remove_document(doc)
-
-def update_plan_memory():
-    #loop documents
-    """memoryObject = {
-        "timestamp": 123456,
-        "lastAccess": lastAccess,
-        "recalled_summary": recalled_summary,
-        "superset_command_of_god_id": superset_command_of_god_id,
-        "planID": planID,
-        "recalled_summary_vector": vector,
-        "intendedPeople": intendedPeople,
-        "intendedPeopleIDs": intendedPeopleIDs,
-        "routine_entries": routine_entries,
-        "importance": importance,
-        "plannedDate": plannedDate
-    }
-
-    for doc in npcID_to_plan_retriever[npcId].memory_stream:
-        print('======================')
-        print(doc.metadata)
-        doc.page_content = "dada"
-        doc.metadata = memoryObject
-        print('======================')
-
-    print(npcID_to_plan_retriever[npcId].memory_stream)"""
-    pass

@@ -347,19 +347,15 @@ async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, da
     memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
     return memory
 
-@app.get("/plan_query")
-async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, top_k: int = 1):
-    res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, top_k=top_k)
-    return res
-
-@app.post("/update_plan_memory")
-async def update_plan_memory(request: Request,background_tasks: BackgroundTasks, data):
-    pass
-
 @app.get("/delete_plan_memories")
 async def delete_plan_memories(request: Request,  planID: str):
     delete_plan_memories(planID)
     return True
+
+@app.get("/plan_query")
+async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, top_k: int = 1):
+    res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, top_k=top_k)
+    return res
 
 def process(query):
     try:

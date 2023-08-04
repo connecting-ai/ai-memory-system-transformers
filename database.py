@@ -296,6 +296,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
             intendedPeople = []
             intendedPeopleIDs = []
             routine_entries = []
+            plannedDate = 0
 
             for key, value in doc.metadata.items():
                 if "timestamp" in key.lower():
@@ -318,6 +319,8 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
                     intendedPeopleIDs = value
                 elif "routine_entries" in key.lower():
                     routine_entries = value
+                elif "plannedDate" in key.lower():
+                    plannedDate = value
                     
             memory = {
                 "npcId": tempNpcId,
@@ -331,6 +334,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
                 "routine_entries": routine_entries,
                 "recalled_summary_vector": recalled_summary_vector,
                 "importance": importance,
+                "plannedDate": plannedDate,
                 "recency": datetime.datetime.now().timestamp() - timestamp
             }
 
@@ -344,7 +348,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
 
     return relevant
 
-def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, vector):
+def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
     tempNpcId = npcId
     npcId = npcId + "_plan"
     #If the npcId has not been seen before, create a memory database and retriever for it
@@ -373,7 +377,8 @@ def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_comma
         "intendedPeople": intendedPeople,
         "intendedPeopleIDs": intendedPeopleIDs,
         "routine_entries": routine_entries,
-        "importance": importance
+        "importance": importance,
+        "plannedDate": plannedDate
     }
 
     npcID_to_plan_retriever[npcId].add_documents([Document(page_content=recalled_summary, metadata=memoryObject)])
@@ -390,5 +395,6 @@ def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_comma
         "routine_entries": routine_entries,
         "recalled_summary_vector": vector,
         "importance": importance,
+        "plannedDate": plannedDate,
         "recency": datetime.datetime.now().timestamp() - timestamp
     }

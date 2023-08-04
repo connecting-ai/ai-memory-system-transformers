@@ -39,6 +39,7 @@ class AddPlanMemoryData(BaseModel):
     timestamp: float
     lastAccess: float
     importance: int
+    plannedDate: float
 
 class AddInMemoryData(BaseModel):
     npcId: str
@@ -297,6 +298,7 @@ async def plan_memories(request: Request, npcId: str):
         intendedPeople = []
         intendedPeopleIDs = []
         routine_entries = []
+        plannedDate = 0
 
         for key, value in x.metadata.items():
             if "timestamp" in key.lower():
@@ -317,6 +319,8 @@ async def plan_memories(request: Request, npcId: str):
                 intendedPeopleIDs = value
             elif "routine_entries" in key.lower():
                 routine_entries = value
+            elif "plannedDate" in key.lower():
+                plannedDate = value
                     
             memory = {
                 "npcId": tempNpcId,
@@ -329,6 +333,7 @@ async def plan_memories(request: Request, npcId: str):
                 "routine_entries": routine_entries,
                 "vector": vector,
                 "importance": importance,
+                "plannedDate": plannedDate,
                 "recency": datetime.datetime.now().timestamp() - timestamp
             }
 
@@ -339,7 +344,7 @@ async def plan_memories(request: Request, npcId: str):
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
     vector = embedding_model.embed_query(data.recalled_summary)
-    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, vector)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
     return memory
 
 @app.get("/plan_query")

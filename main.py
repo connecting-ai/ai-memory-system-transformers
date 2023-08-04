@@ -352,6 +352,15 @@ async def plan_query(request: Request, npcId: str, input: str, max_memories = -1
     res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, top_k=top_k)
     return res
 
+@app.post("/update_plan_memory")
+async def update_plan_memory(request: Request,background_tasks: BackgroundTasks, data):
+    pass
+
+@app.get("/delete_plan_memories")
+async def delete_plan_memories(request: Request,  planID: str):
+    delete_plan_memories(planID)
+    return True
+
 def process(query):
     try:
         res = None

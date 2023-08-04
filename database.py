@@ -79,6 +79,10 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
                 doc = self.memory_stream[buffer_idx]
                 results[buffer_idx] = (doc, relevance)
         return results
+    
+    def remove_document(self, document):
+        print("to remove:", document)
+        self.memory_stream.remove(document)
 
 embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
 # Initialize the vectorstore as empty
@@ -382,7 +386,7 @@ def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_comma
     }
 
     npcID_to_plan_retriever[npcId].add_documents([Document(page_content=recalled_summary, metadata=memoryObject)])
-
+    
     return {
         "npcId": tempNpcId,
         "timestamp": timestamp,
@@ -398,3 +402,35 @@ def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_comma
         "plannedDate": plannedDate,
         "recency": datetime.datetime.now().timestamp() - timestamp
     }
+
+def delete_plan_memories(planId):
+    for npcId in npcID_to_plan_retriever:
+        for doc in npcID_to_plan_retriever[npcId].memory_stream:
+            if doc.metadata["planID"] == planId:
+                npcID_to_plan_retriever[npcId].remove_document(doc)
+
+def update_plan_memory():
+    #loop documents
+    """memoryObject = {
+        "timestamp": 123456,
+        "lastAccess": lastAccess,
+        "recalled_summary": recalled_summary,
+        "superset_command_of_god_id": superset_command_of_god_id,
+        "planID": planID,
+        "recalled_summary_vector": vector,
+        "intendedPeople": intendedPeople,
+        "intendedPeopleIDs": intendedPeopleIDs,
+        "routine_entries": routine_entries,
+        "importance": importance,
+        "plannedDate": plannedDate
+    }
+
+    for doc in npcID_to_plan_retriever[npcId].memory_stream:
+        print('======================')
+        print(doc.metadata)
+        doc.page_content = "dada"
+        doc.metadata = memoryObject
+        print('======================')
+
+    print(npcID_to_plan_retriever[npcId].memory_stream)"""
+    pass

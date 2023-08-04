@@ -273,10 +273,10 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
 def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
     tempNpcId = npcId
     npcId = npcId + "_plan"
-    if npcId not in npcID_to_relationship_retriever.keys():
+    if npcId not in npcID_to_plan_retriever.keys():
         return []
 
-    retriever = npcID_to_relationship_retriever[npcId]
+    retriever = npcID_to_plan_retriever[npcId]
     relevant = []
 
     for query in queries:
@@ -287,21 +287,25 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
 
         for doc in retrieved_docs:
             timestamp = 0
+            lastAccess = 0
             importance = 0
-            vector = ""
+            recalled_summary_vector = ""
             recalled_summary = ""
             superset_command_of_god_id = ""
             planID = ""
             intendedPeople = []
+            intendedPeopleIDs = []
             routine_entries = []
 
             for key, value in doc.metadata.items():
                 if "timestamp" in key.lower():
                     timestamp = value
+                elif "lastaccess" in key.lower():
+                    lastAccess = value
                 elif "importance" in key.lower():
                     importance = value
                 elif "vector" in key.lower():
-                    vector = value
+                    recalled_summary_vector = value
                 elif "recalled_summary" in key.lower():
                     recalled_summary = value
                 elif "superset_command_of_god_id" in key.lower():
@@ -310,18 +314,22 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
                     planID = value
                 elif "intendedPeople" in key.lower():
                     intendedPeople = value
+                elif "intendedPeopleIDs" in key.lower():
+                    intendedPeopleIDs = value
                 elif "routine_entries" in key.lower():
                     routine_entries = value
                     
             memory = {
                 "npcId": tempNpcId,
                 "timestamp": timestamp,
+                "lastAccess": lastAccess,
                 "recalled_summary": recalled_summary,
                 "superset_command_of_god_id": superset_command_of_god_id,
                 "planID": planID,
                 "intendedPeople": intendedPeople,
+                "intendedPeopleIDs": intendedPeopleIDs,
                 "routine_entries": routine_entries,
-                "vector": vector,
+                "recalled_summary_vector": recalled_summary_vector,
                 "importance": importance,
                 "recency": datetime.datetime.now().timestamp() - timestamp
             }
@@ -336,7 +344,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
 
     return relevant
 
-def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, routine_entries, importance, vector):
+def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, vector):
     tempNpcId = npcId
     npcId = npcId + "_plan"
     #If the npcId has not been seen before, create a memory database and retriever for it
@@ -357,10 +365,13 @@ def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id
 
     memoryObject = {
         "timestamp": timestamp,
+        "lastAccess": lastAccess,
         "recalled_summary": recalled_summary,
         "superset_command_of_god_id": superset_command_of_god_id,
         "planID": planID,
+        "recalled_summary_vector": vector,
         "intendedPeople": intendedPeople,
+        "intendedPeopleIDs": intendedPeopleIDs,
         "routine_entries": routine_entries,
         "importance": importance
     }
@@ -370,12 +381,14 @@ def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id
     return {
         "npcId": tempNpcId,
         "timestamp": timestamp,
+        "lastAccess": lastAccess,
         "recalled_summary": recalled_summary,
         "superset_command_of_god_id": superset_command_of_god_id,
         "planID": planID,
         "intendedPeople": intendedPeople,
+        "intendedPeopleIDs": intendedPeopleIDs,
         "routine_entries": routine_entries,
-        "vector": vector,
+        "recalled_summary_vector": vector,
         "importance": importance,
         "recency": datetime.datetime.now().timestamp() - timestamp
     }

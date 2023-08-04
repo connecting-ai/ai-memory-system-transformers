@@ -34,8 +34,10 @@ class AddPlanMemoryData(BaseModel):
     superset_command_of_god_id: str
     planID: str
     intendedPeople: list
+    intendedPeopleIDs: list
     routine_entries: list
     timestamp: float
+    lastAccess: float
     importance: int
 
 class AddInMemoryData(BaseModel):
@@ -293,6 +295,7 @@ async def plan_memories(request: Request, npcId: str):
         superset_command_of_god_id = ""
         planID = ""
         intendedPeople = []
+        intendedPeopleIDs = []
         routine_entries = []
 
         for key, value in x.metadata.items():
@@ -310,6 +313,8 @@ async def plan_memories(request: Request, npcId: str):
                 planID = value
             elif "intendedPeople" in key.lower():
                 intendedPeople = value
+            elif "intendedPeopleIDs" in key.lower():
+                intendedPeopleIDs = value
             elif "routine_entries" in key.lower():
                 routine_entries = value
                     
@@ -320,6 +325,7 @@ async def plan_memories(request: Request, npcId: str):
                 "superset_command_of_god_id": superset_command_of_god_id,
                 "planID": planID,
                 "intendedPeople": intendedPeople,
+                "intendedPeopleIDs": intendedPeopleIDs,
                 "routine_entries": routine_entries,
                 "vector": vector,
                 "importance": importance,
@@ -332,11 +338,8 @@ async def plan_memories(request: Request, npcId: str):
 
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
-    print("dada")
-    print(data)
     vector = embedding_model.embed_query(data.recalled_summary)
-    print(vector)
-    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.routine_entries, data.importance, vector)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, vector)
     return memory
 
 @app.get("/plan_query")

@@ -353,7 +353,7 @@ async def delete_plan_memories(request: Request,  planID: str):
     return True
 
 @app.get("/plan_query")
-async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, threshold: int = 0.65):
+async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, threshold: int = 0.8):
     res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, threshold=threshold)
     return res
 

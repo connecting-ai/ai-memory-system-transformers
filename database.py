@@ -274,7 +274,7 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
 
     return relevant
 
-def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.65):
+def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
     tempNpcId = npcId
     npcId = npcId + "_plan"
     if npcId not in npcID_to_plan_retriever.keys():

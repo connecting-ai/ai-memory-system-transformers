@@ -209,7 +209,6 @@ async def result(request: Request, query_id: str):
                     resp = { 'vector': QUERY_BUFFER[query_id].result }
                 elif (QUERY_BUFFER[query_id].query_type == 1):
                     res = QUERY_BUFFER[query_id].result
-                    print("query res:", res)
                     for memory in res:
                         if "_id" in memory:
                             del memory["_id"]
@@ -367,7 +366,6 @@ def process(query):
             for memory in query.memories:
                 vector = memory['vector']
                 addOnlyIfUnique = False
-                print(memory['memory'], type(memory['memory']))
                 if 'addOnlyIfUnique' in memory:
                     addOnlyIfUnique = memory['addOnlyIfUnique']
                 newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)

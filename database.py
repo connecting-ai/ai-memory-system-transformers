@@ -26,8 +26,10 @@ from copy import deepcopy
 import lancedb
 db_init = lancedb.connect("./lancedb")
 
-def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
+def _get_hours_passed(time: datetime, ref_time: int) -> float:
     """Get the hours passed between two datetime objects."""
+    #convert ref_time from unix timestamp to datetime
+    ref_time = datetime.datetime.fromtimestamp(ref_time)
     return (time - ref_time).total_seconds() / 3600
 
 class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
@@ -40,7 +42,7 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         """Return the combined score for a document."""
         hours_passed = _get_hours_passed(
             current_time,
-            document.metadata["last_accessed_at"],
+            document.metadata["lastAccess"],
         )
         #Note: We can change the above 'last_accessed_at' above to 'created_at' to rank memory based on when it was created (rather than when it was last accessed in the Langchain default implementation)
         #https://github.com/hwchase17/langchain/blob/85dae78548ed0c11db06e9154c7eb4236a1ee246/langchain/retrievers/time_weighted_retriever.py#L119
@@ -81,7 +83,6 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         return results
     
     def remove_document(self, document):
-        print("to remove:", document)
         self.memory_stream.remove(document)
 
 embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
@@ -109,6 +110,10 @@ def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, chec
                         {
                             "vector": embedding_model.embed_query("<NULL ENTRY>"),
                             "text": "<NULL ENTRY>",
+                            "timestamp": 0,
+                            "lastAccess": 0,
+                            "importance": 0,
+                            "buffer_idx": 0,
                         }
                     ],
                     mode="overwrite",
@@ -285,18 +290,14 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
 
     for query in queries:
         retrieved_docs = retriever.get_salient_docs(query)
-        print('retrieved docs:', retrieved_docs)
 
         for doc in retrieved_docs:
-            print(retrieved_docs[doc])
             score = retrieved_docs[doc][1]
-            print(score)
             if score < threshold:
                 continue
             
             doc = retrieved_docs[doc][0].page_content
             doc = get_document_from_plan_memory(tempNpcId, doc)
-            print(doc)
 
             if doc == None:
                 continue
@@ -372,13 +373,9 @@ def delete_plan_memories(planId):
 def get_document_from_plan_memory(npcId, pageContent):
     npcId = npcId + "_plan"
     if npcId not in npcID_to_plan_retriever.keys():
-        print("NPC ID not in plan retriever", npcId)
         return None
-    
-    print("NPC ID in plan retriever", npcId,"-", npcID_to_plan_retriever[npcId].memory_stream)
 
     for doc in npcID_to_plan_retriever[npcId].memory_stream:
-        print(doc.page_content, "-", pageContent)
         if doc.page_content == pageContent:
             return doc
     return None

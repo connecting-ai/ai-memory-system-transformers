@@ -70,14 +70,14 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         docs_and_scores = self.vectorstore.similarity_search(
             query, **self.search_kwargs
         )
+        print(docs_and_scores)
         results = {}
+        counter = 0
         for doc in docs_and_scores:
             fetched_doc = doc
             relevance = doc.metadata['score']
-            if "buffer_idx" in fetched_doc.metadata:
-                buffer_idx = fetched_doc.metadata["buffer_idx"]
-                doc = self.memory_stream[buffer_idx]
-                results[buffer_idx] = (doc, relevance)
+            results[counter] = (fetched_doc, relevance)
+            counter += 1
         return results
     
     def remove_document(self, document):
@@ -274,7 +274,7 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
 
     return relevant
 
-def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
+def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.65):
     tempNpcId = npcId
     npcId = npcId + "_plan"
     if npcId not in npcID_to_plan_retriever.keys():
@@ -284,12 +284,23 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
     relevant = []
 
     for query in queries:
-        # vector = embedding_model.embed_query(query)
-        retriever.k = top_k
-        retrieved_docs = retriever.get_relevant_documents(query)
-        retriever.k = 1
+        retrieved_docs = retriever.get_salient_docs(query)
+        print('retrieved docs:', retrieved_docs)
 
         for doc in retrieved_docs:
+            print(retrieved_docs[doc])
+            score = retrieved_docs[doc][1]
+            print(score)
+            if score < threshold:
+                continue
+            
+            doc = retrieved_docs[doc][0].page_content
+            doc = get_document_from_plan_memory(tempNpcId, doc)
+            print(doc)
+
+            if doc == None:
+                continue
+
             timestamp = 0
             lastAccess = 0
             importance = 0
@@ -339,7 +350,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, top_k=1):
                 "recalled_summary_vector": recalled_summary_vector,
                 "importance": importance,
                 "plannedDate": plannedDate,
-                "recency": datetime.datetime.now().timestamp() - timestamp
+                "recency": datetime.datetime.now().timestamp() - timestamp,
             }
 
             if memory not in relevant:
@@ -357,6 +368,20 @@ def delete_plan_memories(planId):
         for doc in npcID_to_plan_retriever[npcId].memory_stream:
             if doc.metadata["planID"] == planId:
                 npcID_to_plan_retriever[npcId].remove_document(doc)
+
+def get_document_from_plan_memory(npcId, pageContent):
+    npcId = npcId + "_plan"
+    if npcId not in npcID_to_plan_retriever.keys():
+        print("NPC ID not in plan retriever", npcId)
+        return None
+    
+    print("NPC ID in plan retriever", npcId,"-", npcID_to_plan_retriever[npcId].memory_stream)
+
+    for doc in npcID_to_plan_retriever[npcId].memory_stream:
+        print(doc.page_content, "-", pageContent)
+        if doc.page_content == pageContent:
+            return doc
+    return None
 
 def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
     tempNpcId = npcId

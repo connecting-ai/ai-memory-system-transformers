@@ -220,11 +220,13 @@ async def result(request: Request, query_id: str):
                         if "_id" in memory:
                             del memory["_id"]
                         result.append(memory["memory"])
+                    del QUERY_BUFFER[query_id]
                     return result
                 else:
                     res = QUERY_BUFFER[query_id].result
                     if "_id" in res:
                         del res["_id"]
+                    del QUERY_BUFFER[query_id]
                     return res
                 del QUERY_BUFFER[query_id]
                 return {}

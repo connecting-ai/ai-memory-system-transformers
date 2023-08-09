@@ -81,6 +81,8 @@ class Query():
     importance: str
     checker: bool
     memories: str
+    memory_query: str
+    top_k: int = 1
     result: str = ""
     experiment_id: str = None
     status: str = "pending"
@@ -138,13 +140,11 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
     return memories
 
 @app.get("/query")
-async def query(request: Request, npcId: str, input: str, top_k: int = 1):
-    memories = getRelevantBaseMemoriesFrom([input], npcId, top_k)
-    res = []
-    for memory in memories:
-        res.append(memory["memory"])
-
-    return res
+async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, input: str, top_k: int = 1):
+    query = Query(query_name="add_in_memory", query_sequence=3, input="", vector = None, query_type=3, npcId=npcId, memory=None, timestamp=None, lastAccess=None, importance=None, checker=None, memories=[], top_k=top_k, memory_query=input)
+    QUERY_BUFFER[query.experiment_id] = query
+    background_tasks.add_task(process, query)
+    return {"id": query.experiment_id}
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
@@ -176,7 +176,7 @@ async def memories(request: Request, npcId: str):
 
 @app.post("/add_in_memory")
 async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data: AddInMemoryData):
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique, memories=[])
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique, memories=[], memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -185,14 +185,14 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     for memory in data.memories:
         memory['vector'] = embedding_model.embed_query(memory['memory'])
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -204,9 +204,8 @@ async def result(request: Request, query_id: str):
             if QUERY_BUFFER[query_id] == None:
                 return {"status": "finished"}
             if QUERY_BUFFER[query_id].status == "done":
-                resp = {}
                 if (QUERY_BUFFER[query_id].query_type == 0):
-                    resp = { 'vector': QUERY_BUFFER[query_id].result }
+                    return { 'vector': QUERY_BUFFER[query_id].result }
                 elif (QUERY_BUFFER[query_id].query_type == 1):
                     res = QUERY_BUFFER[query_id].result
                     for memory in res:
@@ -214,13 +213,21 @@ async def result(request: Request, query_id: str):
                             del memory["_id"]
                     del QUERY_BUFFER[query_id]
                     return res
+                elif (QUERY_BUFFER[query_id].query_type == 3):
+                    res = QUERY_BUFFER[query_id].result
+                    result = []
+                    for memory in res:
+                        if "_id" in memory:
+                            del memory["_id"]
+                        result.append(memory["memory"])
+                    return result
                 else:
                     res = QUERY_BUFFER[query_id].result
                     if "_id" in res:
                         del res["_id"]
                     return res
                 del QUERY_BUFFER[query_id]
-                return resp
+                return {}
             return {"status": QUERY_BUFFER[query_id].status}
         else:
             return {"status": "finished"}
@@ -374,13 +381,19 @@ def process(query):
         elif (query.query_type == 2):
             query.vector = embedding_model.embed_query(query.memory)
             res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
+        elif (query.query_type == 3):
+            memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, query.top_k)
+            res = memories
         else:
             print("No Query Type was present")
             
         QUERY_BUFFER[query.experiment_id].result = res
         QUERY_BUFFER[query.experiment_id].status = "done"
     except Exception as e:
+            print("===============")
             print(e)
+            print(traceback.format_exc())
+            print("===============")
 
 @app.get("/backlog/")
 def return_backlog():

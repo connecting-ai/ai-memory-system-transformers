@@ -1,27 +1,16 @@
 import datetime
-import json
-import numpy as np
-import pymongo 
 
-import _pickle as cPickle
-import os
-import bz2
 
-from constants import DB_NAME, MONGO_URL, COL_NAME
-from vectorizer import compare
 
-from constants import OPENAI_KEY
 
 from langchain.vectorstores import LanceDB
-from langchain.docstore import InMemoryDocstore
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings, SentenceTransformerEmbeddings 
+from langchain.embeddings import HuggingFaceEmbeddings 
 
 from langchain.retrievers import TimeWeightedVectorStoreRetriever
 from langchain.schema import Document
 
 
-from typing import Any, Dict, List, Optional, Tuple
-from copy import deepcopy
+from typing import Dict, List, Optional, Tuple
 
 import lancedb
 db_init = lancedb.connect("./lancedb")
@@ -203,6 +192,10 @@ def addRelationshipMemory(npcId, memory, timestamp, lastAccess, vector, importan
                         {
                             "vector": embedding_model.embed_query("<NULL ENTRY>"),
                             "text": "<NULL ENTRY>",
+                            "timestamp": 0,
+                            "lastAccess": 0,
+                            "importance": 0,
+                            "buffer_idx": 0,
                         }
                     ],
                     mode="overwrite",

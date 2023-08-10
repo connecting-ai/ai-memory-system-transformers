@@ -18,7 +18,6 @@ client = MongoClient(uri, server_api=ServerApi('1'))
 #check if db exists
 embedding_size = 768
 
-client = MongoClient('mongodb://localhost:27017/')
 db = client['npc_memory_db']
 
 # Initialize Mongo collections if they don't exist

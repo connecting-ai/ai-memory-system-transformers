@@ -1,3 +1,4 @@
+import datetime
 import traceback
 from envReader import read, getValue
 read()
@@ -10,12 +11,11 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import embedding_model, getRelationshipMemoriesRetrieved, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, embedding_model, getPlanMemoriesRetrieved, getRelationshipMemoriesRetrieved, getRelevantPlanMemories, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
 logging.basicConfig(filename='app.log', filemode='w', level=logging.INFO)
-
 
 class MemoryData():
     npcId: str
@@ -27,7 +27,20 @@ class MemoryData():
     
 class MassMemoryData(BaseModel):
     memories: list
-    
+
+class AddPlanMemoryData(BaseModel):
+    npcId: str
+    recalled_summary: str
+    superset_command_of_god_id: str
+    planID: str
+    intendedPeople: list
+    intendedPeopleIDs: list
+    routine_entries: list
+    timestamp: float
+    lastAccess: float
+    importance: int
+    plannedDate: float
+
 class AddInMemoryData(BaseModel):
     npcId: str
     memory: str
@@ -68,6 +81,8 @@ class Query():
     importance: str
     checker: bool
     memories: str
+    memory_query: str
+    top_k: int = 1
     result: str = ""
     experiment_id: str = None
     status: str = "pending"
@@ -125,13 +140,11 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
     return memories
 
 @app.get("/query")
-async def query(request: Request, npcId: str, input: str, top_k: int = 1):
-    memories = getRelevantBaseMemoriesFrom([input], npcId, top_k)
-    res = []
-    for memory in memories:
-        res.append(memory["memory"])
-
-    return res
+async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, input: str, top_k: int = 1):
+    query = Query(query_name="add_in_memory", query_sequence=3, input="", vector = None, query_type=3, npcId=npcId, memory=None, timestamp=None, lastAccess=None, importance=None, checker=None, memories=[], top_k=top_k, memory_query=input)
+    QUERY_BUFFER[query.experiment_id] = query
+    background_tasks.add_task(process, query)
+    return {"id": query.experiment_id}
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
@@ -163,7 +176,7 @@ async def memories(request: Request, npcId: str):
 
 @app.post("/add_in_memory")
 async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data: AddInMemoryData):
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique, memories=[])
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique, memories=[], memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -172,14 +185,14 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     for memory in data.memories:
         memory['vector'] = embedding_model.embed_query(memory['memory'])
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -191,24 +204,32 @@ async def result(request: Request, query_id: str):
             if QUERY_BUFFER[query_id] == None:
                 return {"status": "finished"}
             if QUERY_BUFFER[query_id].status == "done":
-                resp = {}
                 if (QUERY_BUFFER[query_id].query_type == 0):
-                    resp = { 'vector': QUERY_BUFFER[query_id].result }
+                    return { 'vector': QUERY_BUFFER[query_id].result }
                 elif (QUERY_BUFFER[query_id].query_type == 1):
                     res = QUERY_BUFFER[query_id].result
-                    print("query res:", res)
                     for memory in res:
                         if "_id" in memory:
                             del memory["_id"]
                     del QUERY_BUFFER[query_id]
                     return res
+                elif (QUERY_BUFFER[query_id].query_type == 3):
+                    res = QUERY_BUFFER[query_id].result
+                    result = []
+                    for memory in res:
+                        if "_id" in memory:
+                            del memory["_id"]
+                        result.append(memory["memory"])
+                    del QUERY_BUFFER[query_id]
+                    return result
                 else:
                     res = QUERY_BUFFER[query_id].result
                     if "_id" in res:
                         del res["_id"]
+                    del QUERY_BUFFER[query_id]
                     return res
                 del QUERY_BUFFER[query_id]
-                return resp
+                return {}
             return {"status": QUERY_BUFFER[query_id].status}
         else:
             return {"status": "finished"}
@@ -237,7 +258,10 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
 
 @app.get("/relationship_memories")
 async def relationship_memories(request: Request, npcId: str):
-    retriever = getRelationshipMemoriesRetrieved()[npcId + "_relationship"]
+    retriever = getRelationshipMemoriesRetrieved()
+    if npcId not in retriever:
+        return []
+    retriever = retriever[npcId + "_relationship"]
     memories = []
     for x in retriever.memory_stream:
         timestamp = 0
@@ -262,6 +286,85 @@ async def relationship_memories(request: Request, npcId: str):
     
     return memories
 
+@app.get("/plan_memories")
+async def plan_memories(request: Request, npcId: str):
+    tempNpcId = npcId
+    npcId = npcId + "_plan"
+    retriever = getPlanMemoriesRetrieved()
+    if npcId not in retriever:
+        return []
+
+    retriever = retriever[npcId]    
+    memories = []
+    for x in retriever.memory_stream:
+        timestamp = 0
+        importance = 0
+        vector = ""
+        recalled_summary = ""
+        superset_command_of_god_id = ""
+        planID = ""
+        intendedPeople = []
+        intendedPeopleIDs = []
+        routine_entries = []
+        plannedDate = 0
+
+        for key, value in x.metadata.items():
+            if "timestamp" in key.lower():
+                timestamp = value
+            elif "importance" in key.lower():
+                importance = value
+            elif "vector" in key.lower():
+                vector = value
+            elif "recalled_summary" in key.lower():
+                recalled_summary = value
+            elif "superset_command_of_god_id" in key.lower():
+                superset_command_of_god_id = value
+            elif "planID" in key.lower():
+                planID = value
+            elif "intendedPeople" in key.lower():
+                intendedPeople = value
+            elif "intendedPeopleIDs" in key.lower():
+                intendedPeopleIDs = value
+            elif "routine_entries" in key.lower():
+                routine_entries = value
+            elif "plannedDate" in key.lower():
+                plannedDate = value
+                    
+            memory = {
+                "npcId": tempNpcId,
+                "timestamp": timestamp,
+                "recalled_summary": recalled_summary,
+                "superset_command_of_god_id": superset_command_of_god_id,
+                "planID": planID,
+                "intendedPeople": intendedPeople,
+                "intendedPeopleIDs": intendedPeopleIDs,
+                "routine_entries": routine_entries,
+                "vector": vector,
+                "importance": importance,
+                "plannedDate": plannedDate,
+                "recency": datetime.datetime.now().timestamp() - timestamp
+            }
+
+            memories.append(memory)
+    
+    return memories
+
+@app.post("/add_in_plan_memory")
+async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
+    vector = embedding_model.embed_query(data.recalled_summary)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
+    return memory
+
+@app.get("/delete_plan_memories")
+async def delete_plan_memories(request: Request,  planID: str):
+    delete_plan_memories(planID)
+    return True
+
+@app.get("/plan_query")
+async def plan_query(request: Request, npcId: str, input: str, max_memories = -1, threshold: int = 0.8):
+    res = getRelevantPlanMemories([input], npcId, max_memories=max_memories, threshold=threshold)
+    return res
+
 def process(query):
     try:
         res = None
@@ -272,7 +375,6 @@ def process(query):
             for memory in query.memories:
                 vector = memory['vector']
                 addOnlyIfUnique = False
-                print(memory['memory'], type(memory['memory']))
                 if 'addOnlyIfUnique' in memory:
                     addOnlyIfUnique = memory['addOnlyIfUnique']
                 newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
@@ -281,13 +383,19 @@ def process(query):
         elif (query.query_type == 2):
             query.vector = embedding_model.embed_query(query.memory)
             res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
+        elif (query.query_type == 3):
+            memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, query.top_k)
+            res = memories
         else:
             print("No Query Type was present")
             
         QUERY_BUFFER[query.experiment_id].result = res
         QUERY_BUFFER[query.experiment_id].status = "done"
     except Exception as e:
+            print("===============")
             print(e)
+            print(traceback.format_exc())
+            print("===============")
 
 @app.get("/backlog/")
 def return_backlog():

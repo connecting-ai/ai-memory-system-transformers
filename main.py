@@ -1,4 +1,3 @@
-import datetime
 import traceback
 from envReader import read, getValue
 read()
@@ -11,7 +10,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addPlanMemory, embedding_model, getPlanMemoriesRetrieved, getRelationshipMemoriesRetrieved, getRelevantPlanMemories, npcID_to_base_retriever, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
@@ -97,8 +96,9 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
     #top_ns: number of salient questions generated for the last_k memories
     #top_k: number of memories retreived for each salient question
     memories = []
-    for x in npcID_to_base_retriever[npcId].memory_stream[-last_k:]:
-        memories.append(x.page_content)
+    _memories = get_base_memories(npcId)
+    for mem in _memories:
+        memories.append(mem)
     # print(memories, type(memories[0]))
 
     queries = getMemoryQueries(memories, top_ns)
@@ -148,30 +148,7 @@ async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, 
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
-    if npcId not in npcID_to_base_retriever.keys():
-        return []
-    memories = []
-    for x in npcID_to_base_retriever[npcId].memory_stream:
-        timestamp = 0
-        lastAccess = 0
-        importance = 0
-
-        for key, value in x.metadata.items():
-            if "timestamp" in key.lower():
-                timestamp = value
-            elif "lastaccess" in key.lower():
-                lastAccess = value
-            elif "importance" in key.lower():
-                importance = value
-
-        memories.append({
-                "npcId": npcId,
-                "timestamp":timestamp,
-                "lastAccess":lastAccess,
-                "importance":importance,
-                "memory":x.page_content
-            })
-        
+    memories = get_base_memories(npcId)
     return memories
 
 @app.post("/add_in_memory")
@@ -216,6 +193,7 @@ async def result(request: Request, query_id: str):
                 elif (QUERY_BUFFER[query_id].query_type == 3):
                     res = QUERY_BUFFER[query_id].result
                     result = []
+                    print(res)
                     for memory in res:
                         if "_id" in memory:
                             del memory["_id"]
@@ -251,108 +229,27 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
         mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
-        if "id" in mem:
-            del mem["id"]
+        if "_id" in mem:
+            del mem["_id"]
         res.append(mem)
     return res
 
 @app.get("/relationship_memories")
 async def relationship_memories(request: Request, npcId: str):
-    retriever = getRelationshipMemoriesRetrieved()
-    if npcId not in retriever:
-        return []
-    retriever = retriever[npcId + "_relationship"]
-    memories = []
-    for x in retriever.memory_stream:
-        timestamp = 0
-        lastAccess = 0
-        importance = 0
-
-        for key, value in x.metadata.items():
-            if "timestamp" in key.lower():
-                timestamp = value
-            elif "lastaccess" in key.lower():
-                lastAccess = value
-            elif "importance" in key.lower():
-                importance = value
-
-        memories.append({
-                "npcId": npcId,
-                "timestamp":timestamp,
-                "lastAccess":lastAccess,
-                "importance":importance,
-                "memory":x.page_content
-            })
-    
+    memories = get_relationship_memories(npcId)
     return memories
 
 @app.get("/plan_memories")
 async def plan_memories(request: Request, npcId: str):
-    tempNpcId = npcId
-    npcId = npcId + "_plan"
-    retriever = getPlanMemoriesRetrieved()
-    if npcId not in retriever:
-        return []
-
-    retriever = retriever[npcId]    
-    memories = []
-    for x in retriever.memory_stream:
-        timestamp = 0
-        importance = 0
-        vector = ""
-        recalled_summary = ""
-        superset_command_of_god_id = ""
-        planID = ""
-        intendedPeople = []
-        intendedPeopleIDs = []
-        routine_entries = []
-        plannedDate = 0
-
-        for key, value in x.metadata.items():
-            if "timestamp" in key.lower():
-                timestamp = value
-            elif "importance" in key.lower():
-                importance = value
-            elif "vector" in key.lower():
-                vector = value
-            elif "recalled_summary" in key.lower():
-                recalled_summary = value
-            elif "superset_command_of_god_id" in key.lower():
-                superset_command_of_god_id = value
-            elif "planID" in key.lower():
-                planID = value
-            elif "intendedPeople" in key.lower():
-                intendedPeople = value
-            elif "intendedPeopleIDs" in key.lower():
-                intendedPeopleIDs = value
-            elif "routine_entries" in key.lower():
-                routine_entries = value
-            elif "plannedDate" in key.lower():
-                plannedDate = value
-                    
-            memory = {
-                "npcId": tempNpcId,
-                "timestamp": timestamp,
-                "recalled_summary": recalled_summary,
-                "superset_command_of_god_id": superset_command_of_god_id,
-                "planID": planID,
-                "intendedPeople": intendedPeople,
-                "intendedPeopleIDs": intendedPeopleIDs,
-                "routine_entries": routine_entries,
-                "vector": vector,
-                "importance": importance,
-                "plannedDate": plannedDate,
-                "recency": datetime.datetime.now().timestamp() - timestamp
-            }
-
-            memories.append(memory)
-    
+    memories = get_plan_memories(npcId)
     return memories
 
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
     vector = embedding_model.embed_query(data.recalled_summary)
     memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
+    if "_id" in memory:
+        del memory["_id"]
     return memory
 
 @app.get("/delete_plan_memories")

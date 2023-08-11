@@ -10,7 +10,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addPlanMemory, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, deleteplan_memories, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
@@ -254,7 +254,7 @@ async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, da
 
 @app.get("/delete_plan_memories")
 async def delete_plan_memories(request: Request,  planID: str):
-    delete_plan_memories(planID)
+    deleteplan_memories(planID)
     return True
 
 @app.get("/plan_query")

@@ -163,7 +163,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
 
     return relevant
 
-def delete_plan_memories(planId):
+def deleteplan_memories(planId):
     collection = db['plan_memory']
     # Deleting all memories related to the given planID
     collection.delete_many({"planID": planId})

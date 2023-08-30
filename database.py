@@ -10,6 +10,7 @@ db_init = lancedb.connect("./lancedb")
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from quantizer import linear_quantize, dequantize, num_bits
 
 #uri = "mongodb+srv://zeref94:V7a2zauORu79GH4u@npc-memory.wyxvdjw.mongodb.net/?retryWrites=true&w=majority"
 uri = "mongodb+srv://alex:o0uV7BkNFsRcmv5q@npc-memory.wyxvdjw.mongodb.net/?retryWrites=true&w=majority"
@@ -54,7 +55,8 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
 
     for query in queries:
         vector_query = embedding_model.embed_query(query)
-        cursor = collection.find({"npcId": npcId, "vector": vector_query}).limit(top_k)
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector_query, num_bits=num_bits)
+        cursor = collection.find({"npcId": npcId, "vector": quantized_vector}).limit(top_k)
 
         for doc in cursor:
             memory = {
@@ -99,7 +101,9 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
     for query in queries:
 
         vector_query = embedding_model.embed_query(query)
-        cursor = collection.find({"npcId": npcId, "vector": vector_query}).limit(top_k)
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector_query, num_bits=num_bits)
+        cursor = collection.find({"npcId": npcId, "vector": quantized_vector}).limit(top_k)
+        
 
         for doc in cursor:
             memory = {
@@ -126,13 +130,14 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
 
     for query in queries:
         vector_query = embedding_model.embed_query(query)
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector_query, num_bits=num_bits)
 
         # Search for memories associated with the given npcId
         cursor = collection.find({"npcId": npcId})
 
         for doc in cursor:
             vector_memory = doc["recalled_summary_vector"]
-            similarity = cosine_similarity(vector_query, vector_memory)
+            similarity = cosine_similarity(quantized_vector, vector_memory)
                         
             # Filter out memories below the threshold
             if similarity >= threshold:

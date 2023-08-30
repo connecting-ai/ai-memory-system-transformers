@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import addPlanMemory, deleteplan_memories, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
+from quantizer import linear_quantize, dequantize, num_bits
 
 logging.basicConfig(filename='app.log', filemode='w', level=logging.INFO)
 
@@ -129,8 +130,9 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
         memory += ")"
         # print(memory)
         vector = embedding_model.embed_query(memory)
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
         # print("vector done")
-        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, vector, -1)
+        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, quantized_vector, -1)
         if "_id" in returnedMemory:
             del returnedMemory["_id"]
             
@@ -161,7 +163,9 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 @app.post("/mass_add_in_memory")
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     for memory in data.memories:
-        memory['vector'] = embedding_model.embed_query(memory['memory'])
+        vector = embedding_model.embed_query(memory['memory'])
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
+        memory['vector'] = quantized_vector
     query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
@@ -225,10 +229,11 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
     res = []
     for memory in data.memories:
         vector = embedding_model.embed_query(memory['memory'])
+        quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
-        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], quantized_vector, memory['importance'], addOnlyIfUnique)
         if "_id" in mem:
             del mem["_id"]
         res.append(mem)
@@ -247,7 +252,8 @@ async def plan_memories(request: Request, npcId: str):
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
     vector = embedding_model.embed_query(data.recalled_summary)
-    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
+    quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, quantized_vector)
     if "_id" in memory:
         del memory["_id"]
     return memory
@@ -266,7 +272,9 @@ def process(query):
     try:
         res = None
         if (query.query_type == 0):
-            res = embedding_model.embed_query(query.input)
+            vector = embedding_model.embed_query(query.input)
+            quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
+            res = quantized_vector
         elif (query.query_type == 1):
             res = []
             for memory in query.memories:
@@ -278,7 +286,9 @@ def process(query):
                 if not newMemory is None:
                     res.append(newMemory)
         elif (query.query_type == 2):
-            query.vector = embedding_model.embed_query(query.memory)
+            vector = embedding_model.embed_query(query.memory)
+            quantized_vector, arr_min, arr_max, scale_factor = linear_quantize(vector, num_bits=num_bits)
+            query.vector = quantized_vector
             res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
         elif (query.query_type == 3):
             memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, query.top_k)

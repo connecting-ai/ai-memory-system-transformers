@@ -30,7 +30,7 @@ if 'relationship_memory' not in db.list_collection_names():
 if 'plan_memory' not in db.list_collection_names():
     db.create_collection('plan_memory')
 
-embedding_model = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
+embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en")
 # Initialize the vectorstore as empty
 
 #### Base memory functions ####

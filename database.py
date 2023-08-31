@@ -284,37 +284,51 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
 
 def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
     collection = db['plan_memory']
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "recalled_summary_vector", text_key = "recalled_summary"
+    )
+
+    #Documentation for `pre_filter`
+    #https://www.mongodb.com/docs/atlas/atlas-search/knn-beta/ 
+    #https://www.mongodb.com/community/forums/t/autocomplete-with-filter-compound-query/177582
+    pre_filter = {
+        "text": {
+            'query': npcId,
+            "path": "npcId"
+        }
+    }
+    post_filter_pipeline = [
+        {
+            "$match": {
+                "score": {"$gt": threshold}
+            }
+        }
+    ]
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1, search_kwargs = {'pre_filter': pre_filter,'post_filter_pipeline': post_filter_pipeline})
     relevant = []
-
+    
     for query in queries:
-        vector_query = embedding_model.embed_query(query)
+        retrieved_docs = retriever.get_relevant_documents(query)
 
-        # Search for memories associated with the given npcId
-        cursor = collection.find({"npcId": npcId})
-
-        for doc in cursor:
-            vector_memory = doc["recalled_summary_vector"]
-            similarity = cosine_similarity(vector_query, vector_memory)
-                        
-            # Filter out memories below the threshold
-            if similarity >= threshold:
-                memory = {
-                    "npcId": doc["npcId"],
-                    "recalled_summary": doc["recalled_summary"],
-                    "planID": doc["planID"],
-                    "superset_command_of_god_id": doc["superset_command_of_god_id"],
-                    "intendedPeople": doc["intendedPeople"],
-                    "intendedPeopleIDs": doc["intendedPeopleIDs"],
-                    "routine_entries": doc["routine_entries"],
-                    "plannedDate": doc["plannedDate"],
-                    "timestamp": doc["timestamp"],
-                    "recalled_summary_vector": doc["recalled_summary_vector"],
-                    "importance": doc["importance"],
-                    "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
-                }
-                
-                if memory not in relevant:
-                    relevant.append(memory)
+        for doc in retrieved_docs:
+            memory = {
+                "npcId": doc.metadata["npcId"],
+                "recalled_summary": doc.page_content,
+                "planID": doc.metadata["planID"],
+                "superset_command_of_god_id": doc.metadata["superset_command_of_god_id"],
+                "timestamp": doc.metadata["timestamp"],
+                "plannedDate": doc.metadata["plannedDate"],
+                "recalled_summary_vector": doc.metadata["recalled_summary_vector"],
+                "importance": doc.metadata["importance"],
+                "recency": datetime.datetime.now().timestamp() - doc["timestamp"],
+                "intendedPeople": doc.metadata["intendedPeople"],
+                "intendedPeopleIDs": doc.metadata["intendedPeopleIDs"],
+                "routine_entries": doc.metadata["routine_entries"],
+            }
+            
+            if memory not in relevant:
+                relevant.append(memory)
 
     # Sort based on recency
     relevant.sort(key=lambda x: x["recency"], reverse=True)
@@ -329,21 +343,24 @@ def deleteplan_memories(planId):
     # Deleting all memories related to the given planID
     collection.delete_many({"planID": planId})
 
-def get_document_from_plan_memory(npcId, pageContent):
-    collection = db['plan_memory']
+#def get_document_from_plan_memory(npcId, pageContent):
+#    collection = db['plan_memory']
     
     # Finding the document using npcId and pageContent (recalled_summary in this case)
-    doc = collection.find_one({"npcId": npcId, "recalled_summary": pageContent})
-
-    return doc if doc else None
+#    doc = collection.find_one({"npcId": npcId, "recalled_summary": pageContent})
+#    return doc if doc else None
 
 def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
     collection = db['plan_memory']
-    
-    memory = {
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "recalled_summary_vector", text_key = "recalled_summary"
+    )
+
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1)
+    memory_object = {
         "npcId": npcId,
         "timestamp": timestamp,
-        "recalled_summary": recalled_summary,
         "superset_command_of_god_id": superset_command_of_god_id,
         "planID": planID,
         "intendedPeople": intendedPeople,
@@ -351,15 +368,23 @@ def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id
         "routine_entries": routine_entries,
         "importance": importance,
         "plannedDate": plannedDate,
-        "recalled_summary_vector": vector
+    }
+    returned_id = retriever.add_documents(([Document(page_content=recalled_summary, metadata=memory_object)]))
+    
+    return {
+        "npcId": npcId,
+        "timestamp": timestamp,
+        "superset_command_of_god_id": superset_command_of_god_id,
+        "planID": planID,
+        "intendedPeople": intendedPeople,
+        "intendedPeopleIDs": intendedPeopleIDs,
+        "routine_entries": routine_entries,
+        "importance": importance,
+        "plannedDate": plannedDate,
+        "recalled_summary" : recalled_summary
     }
 
-    # Inserting the memory into the database
-    inserted_id = collection.insert_one(memory).inserted_id
-
-    return memory if inserted_id else None
-
-def get_base_memories(npcId):
+def get_lastk_base_memories(npcId, k = 100):
     collection = db['base_memory']  # Assuming the collection name is 'base_memory'. Adjust if necessary.
     
     # If you want to keep the original functionality of checking for the npcId existence, you'd do:

@@ -10,7 +10,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addPlanMemory, deleteplan_memories, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, deleteplan_memories, embedding_model, get_lastk_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
@@ -92,7 +92,7 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
     #top_ns: number of salient questions generated for the last_k memories
     #top_k: number of memories retreived for each salient question
     memories = []
-    _memories = get_base_memories(npcId)
+    _memories = get_lastk_base_memories(npcId, k = last_k)
     for mem in _memories:
         memories.append(mem)
     # print(memories, type(memories[0]))
@@ -144,7 +144,7 @@ async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, 
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
-    memories = get_base_memories(npcId)
+    memories = get_lastk_base_memories(npcId, k = 100)
     return memories
 
 @app.post("/add_in_memory")

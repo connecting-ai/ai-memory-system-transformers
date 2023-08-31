@@ -22,7 +22,7 @@ embedding_size = 384
 def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
     """Get the hours passed between two datetime objects."""
     #convert ref_time from unix timestamp to datetime
-    ref_time = datetime.datetime.fromtimestamp(ref_time)
+    ref_time = datetime.datetime.fromtimestamp(int(ref_time))
     return (time - ref_time).total_seconds() / 3600
 
 class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
@@ -62,15 +62,15 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         docs_and_scores: List[Tuple[Document, float]]
 
         #Note: Changed to `vectorstore.similarity_search` for usage with Chroma and Lance--->
-        docs_and_scores = self.vectorstore.similarity_search(
-            query, **self.search_kwargs
+        docs_and_scores = self.vectorstore.similarity_search_with_score(
+            query, k = self.k, **self.search_kwargs
         )
         print(docs_and_scores)
         results = {}
         counter = 0
         for doc in docs_and_scores:
-            fetched_doc = doc
-            relevance = doc.metadata['score']
+            fetched_doc = doc[0]
+            relevance = doc[1]
             results[counter] = (fetched_doc, relevance)
             counter += 1
         return results

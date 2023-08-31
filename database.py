@@ -147,13 +147,12 @@ embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en")
 # Initialize the vectorstore as empty
 
 #### Base memory functions ####
-def addBaseMemory(npcId, memory, timestamp, lastAccess, vector, importance, checker=False):
+def addBaseMemory(npcId, memory, timestamp, vector, importance, checker=False):
     collection = db['base_memory']
     doc = {
         "npcId": npcId,
         "memory": memory,
         "timestamp": timestamp,
-        "lastAccess": lastAccess,
         "vector": vector,
         "importance": importance
     }
@@ -174,10 +173,9 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
                 "npcId": doc["npcId"],
                 "memory": doc["memory"],
                 "timestamp": doc["timestamp"],
-                "lastAccess": doc["lastAccess"],
                 "vector": doc["vector"],
                 "importance": doc["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc["lastAccess"]
+                "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
             }
             if memory not in relevant:
                 relevant.append(memory)
@@ -190,13 +188,12 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
 
 
 #### Relationship memory methods ####
-def addRelationshipMemory(npcId, memory, timestamp, lastAccess, vector, importance):
+def addRelationshipMemory(npcId, memory, timestamp, vector, importance):
     collection = db['relationship_memory']
     doc = {
         "npcId": npcId,
         "memory": memory,
         "timestamp": timestamp,
-        "lastAccess": lastAccess,
         "vector": vector,
         "importance": importance
     }
@@ -219,10 +216,9 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
                 "npcId": doc["npcId"],
                 "memory": doc["memory"],
                 "timestamp": doc["timestamp"],
-                "lastAccess": doc["lastAccess"],
                 "vector": doc["vector"],
                 "importance": doc["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc["lastAccess"]
+                "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
             }
             if memory not in relevant:
                 relevant.append(memory)
@@ -259,10 +255,9 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
                     "routine_entries": doc["routine_entries"],
                     "plannedDate": doc["plannedDate"],
                     "timestamp": doc["timestamp"],
-                    "lastAccess": doc["lastAccess"],
                     "recalled_summary_vector": doc["recalled_summary_vector"],
                     "importance": doc["importance"],
-                    "recency": datetime.datetime.now().timestamp() - doc["lastAccess"]
+                    "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
                 }
                 
                 if memory not in relevant:
@@ -289,13 +284,12 @@ def get_document_from_plan_memory(npcId, pageContent):
 
     return doc if doc else None
 
-def addPlanMemory(npcId, recalled_summary, timestamp, lastAccess, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
+def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
     collection = db['plan_memory']
     
     memory = {
         "npcId": npcId,
         "timestamp": timestamp,
-        "lastAccess": lastAccess,
         "recalled_summary": recalled_summary,
         "superset_command_of_god_id": superset_command_of_god_id,
         "planID": planID,
@@ -325,14 +319,12 @@ def get_base_memories(npcId):
 
     for doc in cursor:
         timestamp = doc.get("timestamp", 0)
-        lastAccess = doc.get("lastAccess", 0)
         importance = doc.get("importance", 0)
         memory_content = doc.get("memory", "")
 
         memories.append({
             "npcId": npcId,
             "timestamp": timestamp,
-            "lastAccess": lastAccess,
             "importance": importance,
             "memory": memory_content
         })
@@ -352,14 +344,12 @@ def get_relationship_memories(npcId):
 
     for doc in cursor:
         timestamp = doc.get("timestamp", 0)
-        lastAccess = doc.get("lastAccess", 0)
         importance = doc.get("importance", 0)
         memory_content = doc.get("memory", "")
 
         memories.append({
             "npcId": npcId,
             "timestamp": timestamp,
-            "lastAccess": lastAccess,
             "importance": importance,
             "memory": memory_content
         })
@@ -379,7 +369,6 @@ def get_plan_memories(npcId):
 
     for doc in cursor:
         timestamp = doc.get("timestamp", 0)
-        lastAccess = doc.get("lastAccess", 0)
         importance = doc.get("importance", 0)
         recalled_summary = doc.get("recalled_summary", "")
         superset_command_of_god_id = doc.get("superset_command_of_god_id", "")
@@ -392,7 +381,6 @@ def get_plan_memories(npcId):
 
         memories.append({
             "timestamp": timestamp,
-            "lastAccess": lastAccess,
             "importance": importance,
             "recalled_summary": recalled_summary,
             "superset_command_of_god_id": superset_command_of_god_id,

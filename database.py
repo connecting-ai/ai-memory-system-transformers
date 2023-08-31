@@ -1,12 +1,13 @@
 import datetime
 
 from langchain.embeddings import HuggingFaceEmbeddings 
-
+from langchain.retrievers import TimeWeightedVectorStoreRetriever
+from langchain.vectorstores import MongoDBAtlasVectorSearch
+from langchain.schema import Document
+from typing import Dict, List, Optional, Tuple
 from comparer import cosine_similarity
-
-
-import lancedb
-db_init = lancedb.connect("./lancedb")
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -16,7 +17,101 @@ uri = "mongodb+srv://alex:o0uV7BkNFsRcmv5q@npc-memory.wyxvdjw.mongodb.net/?retry
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
 #check if db exists
-embedding_size = 768
+embedding_size = 384
+
+def _get_hours_passed(time: datetime, ref_time: datetime) -> float:
+    """Get the hours passed between two datetime objects."""
+    #convert ref_time from unix timestamp to datetime
+    ref_time = datetime.datetime.fromtimestamp(ref_time)
+    return (time - ref_time).total_seconds() / 3600
+
+class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
+    def _get_combined_score(
+            self,
+            document: Document,
+            vector_relevance: Optional[float],
+            current_time: datetime,
+        ) -> float:
+        """Return the combined score for a document."""
+        hours_passed = _get_hours_passed(
+            current_time,
+            document.metadata["lastAccess"],
+        )
+        #Note: We can change the above 'last_accessed_at' above to 'created_at' to rank memory based on when it was created (rather than when it was last accessed in the Langchain default implementation)
+        #https://github.com/hwchase17/langchain/blob/85dae78548ed0c11db06e9154c7eb4236a1ee246/langchain/retrievers/time_weighted_retriever.py#L119
+
+        score = (1.0 - self.decay_rate) ** hours_passed
+        # print(f'score contributed by time: {score}')
+        for key in self.other_score_keys:
+            if key in document.metadata:
+                if key != 'importance':
+                  score += document.metadata[key]
+                else:
+                  score += int(document.metadata[key])/10.
+                #   print(f'score contributed by importance: {int(document.metadata[key])/10.}')
+
+        if vector_relevance is not None:
+            score += vector_relevance
+            # print(f'score contributed by vector relevance: {vector_relevance}')
+
+        # print(f'total score: {score}')
+        # print('------------')
+        return score                         
+    def get_salient_docs(self, query: str) -> Dict[int, Tuple[Document, float]]:
+        """Return documents that are salient to the query."""
+        docs_and_scores: List[Tuple[Document, float]]
+
+        #Note: Changed to `vectorstore.similarity_search` for usage with Chroma and Lance--->
+        docs_and_scores = self.vectorstore.similarity_search(
+            query, **self.search_kwargs
+        )
+        print(docs_and_scores)
+        results = {}
+        counter = 0
+        for doc in docs_and_scores:
+            fetched_doc = doc
+            relevance = doc.metadata['score']
+            results[counter] = (fetched_doc, relevance)
+            counter += 1
+        return results
+
+    def add_documents(self, documents: List[Document], **kwargs: Any) -> List[str]:
+        """Add documents to vectorstore."""
+        current_time = kwargs.get("current_time")
+        if current_time is None:
+            current_time = datetime.datetime.now()
+        # Avoid mutating input documents
+        dup_docs = [deepcopy(d) for d in documents]
+        for i, doc in enumerate(dup_docs):
+            if "lastAccess" not in doc.metadata:
+                doc.metadata["lastAccess"] = current_time
+            if "timestamp" not in doc.metadata:
+                doc.metadata["timestamp"] = current_time
+            doc.metadata["buffer_idx"] = len(self.memory_stream) + i
+        self.memory_stream.extend(dup_docs)
+        return self.vectorstore.add_documents(dup_docs, **kwargs)
+
+    async def aadd_documents(
+        self, documents: List[Document], **kwargs: Any
+    ) -> List[str]:
+        """Add documents to vectorstore."""
+        current_time = kwargs.get("current_time")
+        if current_time is None:
+            current_time = datetime.datetime.now()
+        # Avoid mutating input documents
+        dup_docs = [deepcopy(d) for d in documents]
+        for i, doc in enumerate(dup_docs):
+            if "lastAccess" not in doc.metadata:
+                doc.metadata["lastAccess"] = current_time
+            if "timestamp" not in doc.metadata:
+                doc.metadata["timestamp"] = current_time
+            doc.metadata["buffer_idx"] = len(self.memory_stream) + i
+        self.memory_stream.extend(dup_docs)
+        return await self.vectorstore.aadd_documents(dup_docs, **kwargs)
+
+    def remove_document(self, document):
+        self.memory_stream.remove(document)
+
 
 db = client['npc_memory_db']
 

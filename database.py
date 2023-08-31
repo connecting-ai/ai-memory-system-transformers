@@ -3,6 +3,7 @@ import datetime
 from langchain.embeddings import HuggingFaceEmbeddings 
 from langchain.retrievers import TimeWeightedVectorStoreRetriever
 from langchain.vectorstores import MongoDBAtlasVectorSearch
+from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.schema import Document
 from typing import Dict, List, Optional, Tuple
 from comparer import cosine_similarity
@@ -35,7 +36,7 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         """Return the combined score for a document."""
         hours_passed = _get_hours_passed(
             current_time,
-            document.metadata["lastAccess"],
+            document.metadata["timestamp"],
         )
         #Note: We can change the above 'last_accessed_at' above to 'created_at' to rank memory based on when it was created (rather than when it was last accessed in the Langchain default implementation)
         #https://github.com/hwchase17/langchain/blob/85dae78548ed0c11db06e9154c7eb4236a1ee246/langchain/retrievers/time_weighted_retriever.py#L119
@@ -63,7 +64,7 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
 
         #Note: Changed to `vectorstore.similarity_search` for usage with Chroma and Lance--->
         docs_and_scores = self.vectorstore.similarity_search_with_score(
-            query, k = self.k, **self.search_kwargs
+            query, k = self.k
         )
         print(docs_and_scores)
         results = {}
@@ -74,7 +75,24 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
             results[counter] = (fetched_doc, relevance)
             counter += 1
         return results
-
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        """Return documents that are relevant to the query."""
+        current_time = datetime.datetime.now()
+        docs_and_scores = {
+            doc.metadata["buffer_idx"]: (doc, self.default_salience)
+            for doc in self.memory_stream[-self.k :]
+        }
+        # If a doc is considered salient, update the salience score
+        docs_and_scores.update(self.get_salient_docs(query))
+        rescored_docs = [
+            (doc, self._get_combined_score(doc, relevance, current_time))
+            for doc, relevance in docs_and_scores.values()
+        ]
+        rescored_docs.sort(key=lambda x: x[1], reverse=True)
+        result = [doc[0] for doc in rescored_docs]
+        return result
     def add_documents(self, documents: List[Document], **kwargs: Any) -> List[str]:
         """Add documents to vectorstore."""
         current_time = kwargs.get("current_time")
@@ -83,8 +101,8 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         # Avoid mutating input documents
         dup_docs = [deepcopy(d) for d in documents]
         for i, doc in enumerate(dup_docs):
-            if "lastAccess" not in doc.metadata:
-                doc.metadata["lastAccess"] = current_time
+            #if "lastAccess" not in doc.metadata:
+            #    doc.metadata["lastAccess"] = current_time
             if "timestamp" not in doc.metadata:
                 doc.metadata["timestamp"] = current_time
             doc.metadata["buffer_idx"] = len(self.memory_stream) + i
@@ -101,8 +119,8 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
         # Avoid mutating input documents
         dup_docs = [deepcopy(d) for d in documents]
         for i, doc in enumerate(dup_docs):
-            if "lastAccess" not in doc.metadata:
-                doc.metadata["lastAccess"] = current_time
+            #if "lastAccess" not in doc.metadata:
+            #    doc.metadata["lastAccess"] = current_time
             if "timestamp" not in doc.metadata:
                 doc.metadata["timestamp"] = current_time
             doc.metadata["buffer_idx"] = len(self.memory_stream) + i

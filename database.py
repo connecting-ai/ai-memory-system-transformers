@@ -64,7 +64,7 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
 
         #Note: Changed to `vectorstore.similarity_search` for usage with Chroma and Lance--->
         docs_and_scores = self.vectorstore.similarity_search_with_score(
-            query, k = self.k
+            query, k = self.k, **self.search_kwargs
         )
         print(docs_and_scores)
         results = {}
@@ -147,34 +147,60 @@ embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en")
 # Initialize the vectorstore as empty
 
 #### Base memory functions ####
-def addBaseMemory(npcId, memory, timestamp, vector, importance, checker=False):
+def addBaseMemory(npcId, memory, timestamp, importance, checker=False):
     collection = db['base_memory']
-    doc = {
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "vector", text_key = "memory"
+    )
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1)
+    
+    memory_object = {
+        "npcId": npcId,
+        "timestamp": timestamp,
+        "importance": importance
+    }
+    returned_id = retriever.add_documents(([Document(page_content=memory, metadata=memory_object)]))
+    
+    return {
         "npcId": npcId,
         "memory": memory,
         "timestamp": timestamp,
-        "vector": vector,
         "importance": importance
     }
-    collection.insert_one(doc)
-    return doc
-
 
 def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
     collection = db['base_memory']
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "vector", text_key = "memory"
+    )
+
+    #Documentation for `pre_filter`
+    #https://www.mongodb.com/docs/atlas/atlas-search/knn-beta/ 
+    #https://www.mongodb.com/community/forums/t/autocomplete-with-filter-compound-query/177582
+    pre_filter = {
+        "text": {
+            'query': npcId,
+            "path": "npcId"
+        }
+    }
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1, search_kwargs = {'pre_filter': pre_filter})
+    retriever.k = top_k
+
     relevant = []
 
     for query in queries:
-        vector_query = embedding_model.embed_query(query)
-        cursor = collection.find({"npcId": npcId, "vector": vector_query}).limit(top_k)
+        #vector_query = embedding_model.embed_query(query)
+        retrieved_docs = retriever.get_relevant_documents(query)
 
-        for doc in cursor:
+        for doc in retrieved_docs:
             memory = {
-                "npcId": doc["npcId"],
-                "memory": doc["memory"],
-                "timestamp": doc["timestamp"],
-                "vector": doc["vector"],
-                "importance": doc["importance"],
+                "npcId": doc.metadata["npcId"],
+                "memory": doc.page_content,
+                "timestamp": doc.metadata["timestamp"],
+                "vector": doc.metadata["vector"],
+                "importance": doc.metadata["importance"],
                 "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
             }
             if memory not in relevant:
@@ -188,36 +214,63 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
 
 
 #### Relationship memory methods ####
-def addRelationshipMemory(npcId, memory, timestamp, vector, importance):
+def addRelationshipMemory(npcId, memory, timestamp, importance):
     collection = db['relationship_memory']
-    doc = {
+    
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "vector", text_key = "memory"
+    )
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1)
+    
+    memory_object = {
+        "npcId": npcId,
+        "timestamp": timestamp,
+        "importance": importance
+    }
+    returned_id = retriever.add_documents(([Document(page_content=memory, metadata=memory_object)]))
+    
+    return {
         "npcId": npcId,
         "memory": memory,
         "timestamp": timestamp,
-        "vector": vector,
         "importance": importance
     }
-    collection.insert_one(doc)
-    return doc
 
 
 
 def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k=1):
     collection = db['relationship_memory']
+    index_name = 'default'
+    vectorstore = MongoDBAtlasVectorSearch(
+        collection, embedding_model, index_name=index_name, embedding_key = "vector", text_key = "memory"
+    )
+
+    #Documentation for `pre_filter`
+    #https://www.mongodb.com/docs/atlas/atlas-search/knn-beta/ 
+    #https://www.mongodb.com/community/forums/t/autocomplete-with-filter-compound-query/177582
+    pre_filter = {
+        "text": {
+            'query': npcId,
+            "path": "npcId"
+        }
+    }
+    retriever = TimeWeightedVectorStoreRetriever_custom(vectorstore=vectorstore, other_score_keys = ['importance'] , decay_rate=.01, k=1, search_kwargs = {'pre_filter': pre_filter})
+    retriever.k = top_k
+
     relevant = []
 
     for query in queries:
+        #vector_query = embedding_model.embed_query(query)
+        retrieved_docs = retriever.get_relevant_documents(query)
 
-        vector_query = embedding_model.embed_query(query)
-        cursor = collection.find({"npcId": npcId, "vector": vector_query}).limit(top_k)
-
-        for doc in cursor:
+        for doc in retrieved_docs:
             memory = {
-                "npcId": doc["npcId"],
-                "memory": doc["memory"],
-                "timestamp": doc["timestamp"],
-                "vector": doc["vector"],
-                "importance": doc["importance"],
+                "npcId": doc.metadata["npcId"],
+                "memory": doc.page_content,
+                "timestamp": doc.metadata["timestamp"],
+                "vector": doc.metadata["vector"],
+                "importance": doc.metadata["importance"],
                 "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
             }
             if memory not in relevant:

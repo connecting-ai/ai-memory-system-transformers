@@ -124,9 +124,9 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
         memory = memory[:-2]
         memory += ")"
         # print(memory)
-        vector = embedding_model.embed_query(memory)
+        #vector = embedding_model.embed_query(memory)
         # print("vector done")
-        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, vector, -1)
+        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, -1)
         if "_id" in returnedMemory:
             del returnedMemory["_id"]
             
@@ -224,7 +224,7 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
-        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], vector, memory['importance'], addOnlyIfUnique)
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['importance'], addOnlyIfUnique)
         if "_id" in mem:
             del mem["_id"]
         res.append(mem)

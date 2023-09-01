@@ -300,4 +300,4 @@ async def healthz():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080, workers=2)
+    uvicorn.run("__main__:app", host="0.0.0.0", port=8080, workers=2)

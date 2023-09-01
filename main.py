@@ -220,7 +220,6 @@ async def relationship_query(request: Request, npcId: str, input: str, max_memor
 async def relationship_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     res = []
     for memory in data.memories:
-        vector = embedding_model.embed_query(memory['memory'])
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']

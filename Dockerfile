@@ -20,6 +20,6 @@ ADD . .
 
 # RUN pip install pymongo openai uvicorn
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["python", "main.py"]

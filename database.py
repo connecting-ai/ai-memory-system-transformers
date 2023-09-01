@@ -13,8 +13,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
-#uri = "mongodb+srv://zeref94:V7a2zauORu79GH4u@npc-memory.wyxvdjw.mongodb.net/?retryWrites=true&w=majority"
-uri = "mongodb+srv://alex:o0uV7BkNFsRcmv5q@npc-memory.wyxvdjw.mongodb.net/?retryWrites=true&w=majority"
+uri = "mongodb+srv://zeref:HHoKxFQYk9seO5pj@cluster1.4ocb6.mongodb.net/?retryWrites=true&w=majority"
+#uri = "mongodb+srv://alex:o0uV7BkNFsRcmv5q@npc-memory.wyxvdjw.mongodb.net/?retryWrites=true&w=majority"
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
 #check if db exists
@@ -57,14 +57,14 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
 
         # print(f'total score: {score}')
         # print('------------')
-        return score                         
+        return score
     def get_salient_docs(self, query: str) -> Dict[int, Tuple[Document, float]]:
         """Return documents that are salient to the query."""
         docs_and_scores: List[Tuple[Document, float]]
 
         #Note: Changed to `vectorstore.similarity_search` for usage with Chroma and Lance--->
         docs_and_scores = self.vectorstore.similarity_search_with_score(
-            query, k = self.k, **self.search_kwargs
+            query, **self.search_kwargs
         )
         print(docs_and_scores)
         results = {}
@@ -201,7 +201,7 @@ def getRelevantBaseMemoriesFrom(queries, npcId, max_memories=-1, top_k=1):
                 "timestamp": doc.metadata["timestamp"],
                 "vector": doc.metadata["vector"],
                 "importance": doc.metadata["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
+                "recency": datetime.datetime.now().timestamp() - doc.metadata["timestamp"]
             }
             if memory not in relevant:
                 relevant.append(memory)
@@ -271,7 +271,7 @@ def getRelevantRelationshipMemoriesFrom(queries, npcId, max_memories = -1, top_k
                 "timestamp": doc.metadata["timestamp"],
                 "vector": doc.metadata["vector"],
                 "importance": doc.metadata["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc["timestamp"]
+                "recency": datetime.datetime.now().timestamp() - doc.metadata["timestamp"]
             }
             if memory not in relevant:
                 relevant.append(memory)
@@ -321,7 +321,7 @@ def getRelevantPlanMemories(queries, npcId, max_memories = -1, threshold=0.8):
                 "plannedDate": doc.metadata["plannedDate"],
                 "recalled_summary_vector": doc.metadata["recalled_summary_vector"],
                 "importance": doc.metadata["importance"],
-                "recency": datetime.datetime.now().timestamp() - doc["timestamp"],
+                "recency": datetime.datetime.now().timestamp() - doc.metadata["timestamp"],
                 "intendedPeople": doc.metadata["intendedPeople"],
                 "intendedPeopleIDs": doc.metadata["intendedPeopleIDs"],
                 "routine_entries": doc.metadata["routine_entries"],
@@ -350,7 +350,7 @@ def deleteplan_memories(planId):
 #    doc = collection.find_one({"npcId": npcId, "recalled_summary": pageContent})
 #    return doc if doc else None
 
-def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate, vector):
+def addPlanMemory(npcId, recalled_summary, timestamp, superset_command_of_god_id, planID, intendedPeople, intendedPeopleIDs, routine_entries, importance, plannedDate):
     collection = db['plan_memory']
     index_name = 'default'
     vectorstore = MongoDBAtlasVectorSearch(

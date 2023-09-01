@@ -4,7 +4,7 @@ RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 WORKDIR /app
 
-RUN pip install langchain==0.0.205
+RUN pip install langchain==0.0.278
 RUN pip install pickleshare==0.7.5
 RUN pip install jsonpickle==3.0.1
 RUN pip install cloudpickle==2.2.1

@@ -1,7 +1,6 @@
-sentence-transformers
+sentence-transformers==2.2.2
 asyncio
 fastapi
-pymongo
+pymongo==4.5.0
 openai
 uvicorn
-lancedb

@@ -99,7 +99,7 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
 
     queries = getMemoryQueries(memories, top_ns)
     # print('=========', queries[0])
-    relevantMemories = getRelevantBaseMemoriesFrom(queries, npcId, top_k)
+    relevantMemories = getRelevantBaseMemoriesFrom(queries, npcId, top_k = top_k)
 
     relevantMemoriesString = []
     for memory in relevantMemories:
@@ -241,8 +241,7 @@ async def plan_memories(request: Request, npcId: str):
 
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
-    vector = embedding_model.embed_query(data.recalled_summary)
-    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate)
     if "_id" in memory:
         del memory["_id"]
     return memory
@@ -274,9 +273,9 @@ def process(query):
                     res.append(newMemory)
         elif (query.query_type == 2):
             query.vector = embedding_model.embed_query(query.memory)
-            res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.vector, query.importance, query.checker)
+            res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.importance, query.checker)
         elif (query.query_type == 3):
-            memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, query.top_k)
+            memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, top_k = query.top_k)
             res = memories
         else:
             print("No Query Type was present")

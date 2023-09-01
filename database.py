@@ -3,7 +3,7 @@ import datetime
 from langchain.embeddings import HuggingFaceEmbeddings 
 from langchain.retrievers import TimeWeightedVectorStoreRetriever
 from langchain.vectorstores import MongoDBAtlasVectorSearch
-from langchain.callbacks.manager import CallbackManagerForRetrieverRun
+from langchain.callbacks import manager
 from langchain.schema import Document
 from typing import Dict, List, Optional, Tuple
 from comparer import cosine_similarity
@@ -76,7 +76,7 @@ class TimeWeightedVectorStoreRetriever_custom(TimeWeightedVectorStoreRetriever):
             counter += 1
         return results
     def _get_relevant_documents(
-        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+        self, query: str, *, run_manager
     ) -> List[Document]:
         """Return documents that are relevant to the query."""
         current_time = datetime.datetime.now()

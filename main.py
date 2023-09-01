@@ -137,10 +137,8 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
 
 @app.get("/query")
 async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, input: str, top_k: int = 1):
-    query = Query(query_name="add_in_memory", query_sequence=3, input="", vector = None, query_type=3, npcId=npcId, memory=None, timestamp=None, importance=None, checker=None, memories=[], top_k=top_k, memory_query=input)
-    QUERY_BUFFER[query.experiment_id] = query
-    background_tasks.add_task(process, query)
-    return {"id": query.experiment_id}
+    res = getRelevantBaseMemoriesFrom([input], npcId, top_k = top_k)
+    return res
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):

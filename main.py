@@ -10,7 +10,7 @@ import logging
 import os
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
-from database import addPlanMemory, deleteplan_memories, embedding_model, get_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
+from database import addPlanMemory, deleteplan_memories, embedding_model, get_lastk_base_memories, get_plan_memories, get_relationship_memories, getRelevantPlanMemories, addBaseMemory, getRelevantBaseMemoriesFrom, addRelationshipMemory, getRelevantRelationshipMemoriesFrom
 from gpt import getMemoryQueries, getMemoryAnswers
 from pydantic import BaseModel
 
@@ -20,7 +20,6 @@ class MemoryData():
     npcId: str
     memory: str
     timestamp: float
-    lastAccess: float
     importance: str
     addOnlyIfUnique: bool = False
     
@@ -36,7 +35,6 @@ class AddPlanMemoryData(BaseModel):
     intendedPeopleIDs: list
     routine_entries: list
     timestamp: float
-    lastAccess: float
     importance: int
     plannedDate: float
 
@@ -44,7 +42,6 @@ class AddInMemoryData(BaseModel):
     npcId: str
     memory: str
     timestamp: float
-    lastAccess: float
     importance: str
     addOnlyIfUnique: bool = False
     
@@ -75,7 +72,6 @@ class Query():
     npcId: str
     memory: str
     timestamp: float
-    lastAccess: float
     vector: str
     importance: str
     checker: bool
@@ -96,7 +92,7 @@ async def relevant_memories(request: Request, npcId: str, last_k:int = 100 , top
     #top_ns: number of salient questions generated for the last_k memories
     #top_k: number of memories retreived for each salient question
     memories = []
-    _memories = get_base_memories(npcId)
+    _memories = get_lastk_base_memories(npcId, k = last_k)
     for mem in _memories:
         memories.append(mem)
     # print(memories, type(memories[0]))
@@ -128,9 +124,9 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
         memory = memory[:-2]
         memory += ")"
         # print(memory)
-        vector = embedding_model.embed_query(memory)
+        #vector = embedding_model.embed_query(memory)
         # print("vector done")
-        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, vector, -1)
+        returnedMemory = addBaseMemory(npcId, memory, timestamp, timestamp, -1)
         if "_id" in returnedMemory:
             del returnedMemory["_id"]
             
@@ -141,19 +137,19 @@ async def post_reflection(request: Request, npcId: str, timestamp: float):
 
 @app.get("/query")
 async def query(request: Request,background_tasks: BackgroundTasks, npcId: str, input: str, top_k: int = 1):
-    query = Query(query_name="add_in_memory", query_sequence=3, input="", vector = None, query_type=3, npcId=npcId, memory=None, timestamp=None, lastAccess=None, importance=None, checker=None, memories=[], top_k=top_k, memory_query=input)
+    query = Query(query_name="add_in_memory", query_sequence=3, input="", vector = None, query_type=3, npcId=npcId, memory=None, timestamp=None, importance=None, checker=None, memories=[], top_k=top_k, memory_query=input)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
 @app.get("/memories")
 async def memories(request: Request, npcId: str):
-    memories = get_base_memories(npcId)
+    memories = get_lastk_base_memories(npcId, k = 100)
     return memories
 
 @app.post("/add_in_memory")
 async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data: AddInMemoryData):
-    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, lastAccess=data.lastAccess, importance=data.importance, checker=data.addOnlyIfUnique, memories=[], memory_query=None)
+    query = Query(query_name="add_in_memory", query_sequence=1, input="", vector = None, query_type=2, npcId=data.npcId, memory=data.memory, timestamp=data.timestamp, importance=data.importance, checker=data.addOnlyIfUnique, memories=[], memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -162,14 +158,14 @@ async def add_in_memory(request: Request,background_tasks: BackgroundTasks, data
 async def mass_add_in_memory(request: Request,background_tasks: BackgroundTasks, data: MassMemoryData):
     for memory in data.memories:
         memory['vector'] = embedding_model.embed_query(memory['memory'])
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, memories=data.memories, vector=None, memory_query=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=1, npcId="", memory="", timestamp=0, importance="", checker=False, memories=data.memories, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
 
 @app.get("/vectorize")
 async def root(request: Request, background_tasks: BackgroundTasks, input: str):
-    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, lastAccess=0, importance="", checker=False, vector=None, memory_query=None)
+    query = Query(query_name="test", query_sequence=5, input=input, query_type=0, npcId="", memory="", timestamp=0, importance="", checker=False, vector=None, memory_query=None)
     QUERY_BUFFER[query.experiment_id] = query
     background_tasks.add_task(process, query)
     return {"id": query.experiment_id}
@@ -228,7 +224,7 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
-        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['importance'], addOnlyIfUnique)
         if "_id" in mem:
             del mem["_id"]
         res.append(mem)
@@ -247,7 +243,7 @@ async def plan_memories(request: Request, npcId: str):
 @app.post("/add_in_plan_memory")
 async def add_plan_memory(request: Request,background_tasks: BackgroundTasks, data: AddPlanMemoryData):
     vector = embedding_model.embed_query(data.recalled_summary)
-    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.lastAccess, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
+    memory = addPlanMemory(data.npcId, data.recalled_summary, data.timestamp, data.superset_command_of_god_id, data.planID, data.intendedPeople, data.intendedPeopleIDs, data.routine_entries, data.importance, data.plannedDate, vector)
     if "_id" in memory:
         del memory["_id"]
     return memory
@@ -274,12 +270,12 @@ def process(query):
                 addOnlyIfUnique = False
                 if 'addOnlyIfUnique' in memory:
                     addOnlyIfUnique = memory['addOnlyIfUnique']
-                newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['lastAccess'], vector, memory['importance'], addOnlyIfUnique)
+                newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], vector, memory['importance'], addOnlyIfUnique)
                 if not newMemory is None:
                     res.append(newMemory)
         elif (query.query_type == 2):
             query.vector = embedding_model.embed_query(query.memory)
-            res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.lastAccess, query.vector, query.importance, query.checker)
+            res = addBaseMemory(query.npcId, query.memory, query.timestamp, query.vector, query.importance, query.checker)
         elif (query.query_type == 3):
             memories = getRelevantBaseMemoriesFrom([query.memory_query], query.npcId, query.top_k)
             res = memories

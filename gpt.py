@@ -19,7 +19,7 @@ Output:
 """
 
 def getMemoryQueries(memories, top_ns=3):
-    memories = [x for x in memories]
+    memories = [x['memory'] for x in memories]
     memories = "\n".join([str(i+1)+". "+x for i,x in enumerate(memories)])
 
     bot = ChatBot("")

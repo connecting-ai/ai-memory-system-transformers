@@ -228,7 +228,7 @@ def addRelationshipMemory(npcId, memory, timestamp, importance):
         "timestamp": timestamp,
         "importance": importance
     }
-    returned_id = retriever.add_documents(([Document(page_content=memory, metadata=memory_object)]))
+    returned_id = retriever.add_documents(([Document(page_content=memory[0], metadata=memory_object)]))
     
     return {
         "npcId": npcId,

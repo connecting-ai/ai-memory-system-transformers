@@ -223,7 +223,7 @@ async def relationship_add_in_memory(request: Request,background_tasks: Backgrou
         addOnlyIfUnique = False
         if 'addOnlyIfUnique' in memory:
             addOnlyIfUnique = memory['addOnlyIfUnique']
-        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['importance'], addOnlyIfUnique)
+        mem = addRelationshipMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['importance'])
         if "_id" in mem:
             del mem["_id"]
         res.append(mem)
@@ -292,12 +292,12 @@ def process(query):
 def return_backlog():
     return {f"return_backlog - Currently {len(QUERY_BUFFER)} jobs in the backlog."}
 
-@api.get('/healthz', status_code=200, response_model=dict)
-    async def healthz():
-        """"
-        Health check endpoint required for Kubernetes LB periodic pings
-        """
-        return {'status': 'OK'}
+@app.get('/healthz', status_code=200, response_model=dict)
+async def healthz():
+    """"
+    Health check endpoint required for Kubernetes LB periodic pings
+    """
+    return {'status': 'OK'}
 
 
 if __name__ == "__main__":

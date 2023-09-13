@@ -266,7 +266,7 @@ def process(query):
                 addOnlyIfUnique = False
                 if 'addOnlyIfUnique' in memory:
                     addOnlyIfUnique = memory['addOnlyIfUnique']
-                newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], vector, memory['importance'], addOnlyIfUnique)
+                newMemory = addBaseMemory(memory['npcId'], memory['memory'], memory['timestamp'], memory['importance'], addOnlyIfUnique)
                 if not newMemory is None:
                     res.append(newMemory)
         elif (query.query_type == 2):
